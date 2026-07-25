@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(pnpm -v)",
+      "Bash(git --version)",
+      "Bash(corepack enable *)",
+      "Bash(corepack prepare *)",
+      "Bash(npm install *)",
+      "Bash(cp .env.example .env)",
+      "Bash(pnpm --filter @rfitness/database db:generate)",
+      "Bash(pnpm --filter @rfitness/api build)",
+      "Bash(pnpm test *)",
+      "Bash(pnpm --filter @rfitness/web build)",
+      "Bash(docker --version)",
+      "Bash(docker compose *)",
+      "PowerShell(Get-Command docker -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command psql -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command postgres -ErrorAction SilentlyContinue)",
+      "Bash(pnpm install *)",
+      "Bash(pnpm --filter @rfitness/api lint)",
+      "Bash(pnpm --filter @rfitness/web lint)",
+      "Bash(npx prisma *)",
+      "Bash(mkdir -p prisma/migrations/20260723000000_init)",
+      "Read(//tmp/**)",
+      "Bash(pnpm build *)",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

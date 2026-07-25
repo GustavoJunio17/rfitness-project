@@ -1,0 +1,17 @@
+node_modules
+dist
+.next
+out
+coverage
+.turbo
+*.log
+apps/api/uploads
+.env
+.env.local
+.env.*.local
+!.env.example
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+.vscode/*
+!.vscode/extensions.json
