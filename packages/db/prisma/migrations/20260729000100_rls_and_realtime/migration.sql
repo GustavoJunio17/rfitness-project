@@ -70,11 +70,26 @@ ALTER TABLE "notification_templates" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "realtime_events" ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "realtime_events_select_own_gym" ON "realtime_events";
-CREATE POLICY "realtime_events_select_own_gym"
-  ON "realtime_events"
-  FOR SELECT
-  TO authenticated
-  USING ("gymId" = public.auth_gym_id());
+
+-- A policy é criada para a role `authenticated`, que existe no Supabase mas não
+-- num Postgres cru (usado em teste local). Sem o guard, esta migration falha
+-- fora do Supabase com "role authenticated does not exist" — e como o resto é
+-- deny-all, não haveria como validar as migrations localmente.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+    EXECUTE $policy$
+      CREATE POLICY "realtime_events_select_own_gym"
+        ON "realtime_events"
+        FOR SELECT
+        TO authenticated
+        USING ("gymId" = public.auth_gym_id());
+    $policy$;
+  ELSE
+    RAISE NOTICE 'Role "authenticated" ausente — policy de realtime_events não criada (ambiente sem Supabase).';
+  END IF;
+END
+$$;
 
 -- REPLICA IDENTITY FULL faz o payload do Postgres Changes trazer a linha
 -- inteira; sem isso o filtro por gymId do lado do cliente não recebe a coluna.

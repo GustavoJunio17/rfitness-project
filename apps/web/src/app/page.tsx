@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { getAuthContext } from "@/server/auth/context";
 
-export default function RootPage() {
-  const hasSession = cookies().has("rf_session");
-  redirect(hasSession ? "/dashboard" : "/login");
+// Depende da sessão (cookies): nunca deve ser pré-renderizada — sem isto o build
+// tentaria avaliar a configuração de runtime e falharia sem as variáveis do
+// Supabase presentes.
+export const dynamic = "force-dynamic";
+
+export default async function RootPage() {
+  const auth = await getAuthContext();
+  redirect(auth ? "/dashboard" : "/login");
 }

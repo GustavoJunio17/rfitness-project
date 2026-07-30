@@ -16,7 +16,7 @@ function intensityClass(ratio: number): string {
 
 export function SalesHeatmap({ cells }: { cells: HeatmapCell[] }) {
   const maxCount = useMemo(() => Math.max(1, ...cells.map((cell) => cell.count)), [cells]);
-  const cellByKey = useMemo(() => new Map(cells.map((cell) => [`${cell.dayOfWeek}-${cell.hour}`, cell.count])), [cells]);
+  const cellByKey = useMemo(() => new Map(cells.map((cell) => [`${cell.weekday}-${cell.hour}`, cell.count])), [cells]);
 
   return (
     <div className="overflow-x-auto">

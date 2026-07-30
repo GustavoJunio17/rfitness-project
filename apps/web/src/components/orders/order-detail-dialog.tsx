@@ -79,7 +79,7 @@ export function OrderDetailDialog({
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">Itens</h3>
             {order.items.map((item) => (
-              <div key={item.id} className="flex justify-between rounded-md border border-border p-2 text-sm">
+              <div key={item.variantId} className="flex justify-between rounded-md border border-border p-2 text-sm">
                 <span>
                   {item.sku} × {item.quantity}
                 </span>
@@ -95,7 +95,7 @@ export function OrderDetailDialog({
           <section className="space-y-2">
             <h3 className="text-sm font-semibold">Histórico de status</h3>
             {order.statusHistory.map((entry) => (
-              <div key={entry.id} className="flex justify-between text-sm text-muted-foreground">
+              <div key={`${entry.status}-${entry.changedAt}`} className="flex justify-between text-sm text-muted-foreground">
                 <span>{STATUS_LABELS[entry.status]}</span>
                 <span>{new Date(entry.changedAt).toLocaleString("pt-BR")}</span>
               </div>

@@ -1,0 +1,144 @@
+# RFitness — Sistema de Gestão de Academia (SaaS)
+
+Estoque com SKUs, PDV, financeiro, dashboard em tempo real, alunos e planos, pedidos e um
+agente de IA no WhatsApp. Um único app Next.js, feito para rodar na **Vercel** com banco,
+autenticação, storage e realtime no **Supabase**.
+
+## Arquitetura
+
+```
+rfitness/
+├── apps/web            # Next.js 15 (App Router) — UI + API (route handlers) + jobs (cron)
+│   ├── src/app/api     # todas as rotas REST
+│   ├── src/server      # camada de servidor: módulos, infra, http
+│   └── src/components  # UI
+├── packages/core       # regras de negócio puras, sem I/O (94 testes)
+├── packages/db         # Prisma schema, migrations e seed
+└── vercel.json         # build + Cron Jobs
+```
+
+Três camadas, com uma regra clara em cada:
+
+| Camada | Papel | Depende de |
+| --- | --- | --- |
+| `packages/core` | cálculo e decisão: delta de estoque, totais de venda, máquina de estados do pedido, analytics, RBAC | nada |
+| `apps/web/src/server/modules` | orquestração: services + repositórios Prisma por contexto | core + Prisma |
+| `apps/web/src/app/api` | borda HTTP: sessão, RBAC, validação zod, tradução de erro | módulos |
+
+`defineRoute` (`src/server/http/route.ts`) concentra o que antes eram guards, pipes e filtro
+de exceção: sessão obrigatória por padrão (401), papel exigido (403), validação de
+body/query/params com zod (400 com as issues) e `DomainError` → status HTTP. Erro inesperado
+sempre vira 500 genérico — mensagem interna não vaza.
+
+### Decisões que moldam o projeto
+
+- **Sem servidor WebSocket.** Funções serverless não sustentam conexão longa. O servidor
+  insere um sinal em `realtime_events`; o browser assina essa tabela via Supabase Realtime e
+  reage refazendo a chamada REST, que aplica RBAC. O payload carrega só tipo e ids — nunca
+  faturamento ou lucro.
+- **Sem `@nestjs/schedule`.** Os jobs diários são Vercel Cron Jobs (`vercel.json`) batendo em
+  `/api/cron/*`, autenticados por `CRON_SECRET`.
+- **Supabase Auth é dono de credencial e sessão.** `gym_id` e `roles` vivem em
+  `app_metadata` (gravável só com service role), então o usuário não consegue se promover a
+  ADMIN. O servidor lê o tenant do JWT a cada request — nenhuma rota aceita `gymId` do cliente.
+- **RLS como segunda barreira.** Todas as tabelas de negócio têm RLS ligado **sem policy**:
+  a anon key não lê nada direto. A única exceção é `realtime_events`, com SELECT escopado pelo
+  `gym_id` do JWT.
+- **Dinheiro nunca é float.** `Decimal(10,2)` no banco, `number` arredondado em centavos no
+  core (`round2`/`sumMoney`), string ISO nas respostas.
+
+## Rodando localmente
+
+Requisitos: Node ≥20, pnpm 9, uma conta Supabase (ou a Supabase CLI para subir local).
+
+```bash
+pnpm install
+cp .env.example .env            # preencha com as credenciais do seu projeto Supabase
+
+pnpm db:generate                # gera o Prisma Client
+pnpm db:migrate:deploy          # aplica as migrations no Supabase
+pnpm db:seed                    # academia demo + admin no Supabase Auth + catálogo
+
+pnpm dev                        # http://localhost:3000
+```
+
+Login da demo: `admin@rfitness-demo.com` / `Rfitness@123`.
+
+Sem projeto Supabase à mão, `docker compose --profile postgres up -d` sobe um Postgres cru —
+suficiente para migrations e para o smoke de integração, mas **não** para login (Auth) nem
+upload de foto (Storage).
+
+### Scripts
+
+| Comando | O que faz |
+| --- | --- |
+| `pnpm dev` / `pnpm build` / `pnpm start` | ciclo do Next |
+| `pnpm test` | testes unitários (core + servidor), sem banco |
+| `pnpm --filter @rfitness/web test:integration` | smoke de integração contra Postgres real (usa `DATABASE_URL`) |
+| `pnpm typecheck` / `pnpm lint` | tipos e lint |
+| `pnpm verify` | typecheck + lint + testes + build |
+| `pnpm db:migrate` / `db:migrate:deploy` / `db:seed` / `db:studio` | banco |
+
+## Deploy na Vercel
+
+1. **Supabase** — crie o projeto e pegue em *Project Settings*:
+   - `DATABASE_URL`: connection string do **pooler** (porta 6543) com
+     `?pgbouncer=true&connection_limit=1` — é a que o runtime serverless usa;
+   - `DIRECT_URL`: conexão direta (porta 5432), usada só por `prisma migrate`;
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
+2. **Storage** — crie um bucket público (padrão: `rfitness-uploads`) para as fotos de SKU.
+3. **Migrations** — `pnpm db:migrate:deploy` apontando para o projeto. A migration de RLS
+   também adiciona `realtime_events` à publicação `supabase_realtime`; confirme em
+   *Database → Replication* que a tabela está publicada.
+4. **Vercel** — importe o repositório. O `vercel.json` já define build command, output
+   directory e os dois Cron Jobs. Configure todas as variáveis do `.env.example` no projeto
+   (inclusive `CRON_SECRET`, que autentica as rotas de cron).
+5. **WhatsApp (opcional)** — suba a Evolution API (`docker compose --profile whatsapp up -d`),
+   aponte o webhook da instância para
+   `https://<seu-app>/api/whatsapp/webhook?token=<EVOLUTION_API_KEY>` e salve o nome da
+   instância em *Dashboard → WhatsApp*. Comece com `ANTHROPIC_MOCK_MODE=true` para testar o
+   fluxo sem custo de API.
+
+Cron Jobs configurados (horários em UTC, equivalentes a 06:00 e 10:00 em São Paulo):
+
+| Rota | Agenda | O que faz |
+| --- | --- | --- |
+| `/api/cron/stock-alerts` | `0 9 * * *` | alertas de validade próxima, vencido e produto parado + limpeza de sinais antigos |
+| `/api/cron/whatsapp-follow-up` | `0 13 * * *` | follow-up dos alunos matriculados há N dias |
+
+## Agente de IA no WhatsApp
+
+`src/server/modules/whatsapp/` — loop manual de tool use sobre o SDK da Anthropic, modelo
+`claude-opus-5`. Três ferramentas: `search_product`, `check_membership_status` e
+`create_order` (o único efeito colateral que o agente pode causar). O pensamento fica no
+default adaptativo do modelo com `effort: "low"`, e recusa dos classificadores
+(`stop_reason: "refusal"`) é tratada antes de ler o conteúdo, com encaminhamento para a
+recepção. `ANTHROPIC_MOCK_MODE=true` responde sem chamar a API.
+
+## Testes
+
+```bash
+pnpm test                                        # 198 testes unitários
+pnpm --filter @rfitness/web test:integration     # 29 verificações contra Postgres real
+```
+
+Os unitários cobrem o core (regras puras) e os services (com repositórios falsos, sem banco).
+O smoke de integração roda os services de verdade contra um Postgres real e verifica o que
+teste unitário não alcança: transação de venda, baixa única na entrega do pedido, ausência de
+baixa parcial quando a entrega falha, idempotência da receita no fluxo de caixa e o conteúdo
+dos sinais de tempo real.
+
+### Não validado neste ambiente
+
+- Login, cadastro e RLS **contra um projeto Supabase real** (o smoke usa Postgres cru, sem
+  Auth/Realtime/Storage).
+- Upload de foto no Supabase Storage.
+- Conversa real do agente no WhatsApp (sem instância Evolution nem chave Anthropic aqui).
+- Leitura de código de barras pela câmera (`html5-qrcode`) — precisa de navegador real.
+
+## Roadmap
+
+Concluído: fundação, estoque, PDV, financeiro + tempo real, alunos, agente de WhatsApp,
+pedidos. Pendente: **cobrança automática** (`Invoice`/`Payment`/`BillingRule` já no schema —
+faltam os jobs e a integração de pagamento) e **relatórios + admin avançado** (exportação,
+permissões granulares via `Permission`/`RolePermission`, gestão de funcionários).

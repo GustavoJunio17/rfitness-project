@@ -30,17 +30,17 @@ export default function DashboardPage() {
 
   const cards = summary
     ? [
-        { label: "Faturamento hoje", value: currency(summary.revenue.today) },
-        { label: "Lucro hoje", value: currency(summary.profit.today) },
-        { label: "Faturamento no mês", value: currency(summary.revenue.month) },
+        { label: "Faturamento hoje", value: currency(summary.today.revenue) },
+        { label: "Lucro hoje", value: currency(summary.today.profit) },
+        { label: "Faturamento no mês", value: currency(summary.month.revenue) },
         { label: "Ticket médio (mês)", value: currency(summary.averageTicket) },
         { label: "Clientes ativos", value: String(summary.students.active) },
         { label: "Novos alunos (mês)", value: String(summary.students.newThisMonth) },
         { label: "Pedidos pendentes", value: String(openOrdersCount ?? 0) },
-        { label: "Valor do estoque", value: currency(summary.stock.stockValue) },
+        { label: "Valor do estoque", value: currency(summary.stock.retailValue) },
         { label: "Valor investido em estoque", value: currency(summary.stock.investedValue) },
-        { label: "Produtos com estoque baixo", value: String(summary.shortages.lowStockCount) },
-        { label: "Produtos em falta", value: String(summary.shortages.outOfStockCount) },
+        { label: "Produtos com estoque baixo", value: String(summary.stock.lowStockCount) },
+        { label: "Produtos em falta", value: String(summary.stock.outOfStockCount) },
       ]
     : [];
 

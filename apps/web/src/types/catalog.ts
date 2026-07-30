@@ -1,32 +1,32 @@
 export interface Category {
   id: string;
-  gymId: string;
   name: string;
+  productCount?: number;
 }
 
 export interface Brand {
   id: string;
-  gymId: string;
   name: string;
+  productCount?: number;
 }
 
 export interface Supplier {
   id: string;
-  gymId: string;
   name: string;
   cnpj: string | null;
   phone: string | null;
   email: string | null;
   address: string | null;
+  productCount?: number;
 }
 
 export type ProductStatus = "ACTIVE" | "INACTIVE" | "DISCONTINUED";
 
 export interface ProductVariant {
   id: string;
-  productId: string;
-  brandId: string | null;
   sku: string;
+  brandId: string | null;
+  brandName: string | null;
   flavor: string | null;
   weight: string | null;
   barcode: string | null;
@@ -34,8 +34,8 @@ export interface ProductVariant {
   location: string | null;
   batch: string | null;
   expiresAt: string | null;
-  costPrice: string;
-  salePrice: string;
+  costPrice: number;
+  salePrice: number;
   minQuantity: number;
   maxQuantity: number | null;
   currentQuantity: number;
@@ -43,13 +43,19 @@ export interface ProductVariant {
 
 export interface Product {
   id: string;
-  gymId: string;
-  categoryId: string | null;
-  supplierId: string | null;
   name: string;
   description: string | null;
   status: ProductStatus;
+  categoryId: string | null;
+  categoryName: string | null;
+  supplierId: string | null;
+  supplierName: string | null;
   variants: ProductVariant[];
+}
+
+export interface VariantByBarcode extends ProductVariant {
+  productId: string;
+  productName: string;
 }
 
 export type StockMovementType =
@@ -61,11 +67,25 @@ export type StockMovementType =
   | "EXPIRATION"
   | "INVENTORY_ADJUSTMENT";
 
+export interface StockMovement {
+  id: string;
+  variantId: string;
+  sku: string;
+  productName: string;
+  type: StockMovementType;
+  /** Delta aplicado ao estoque (negativo em saídas). */
+  quantity: number;
+  reason: string | null;
+  createdAt: string;
+}
+
 export type StockAlertType = "LOW_STOCK" | "EXPIRING_SOON" | "EXPIRED" | "STALE";
 
 export interface StockAlert {
   id: string;
   variantId: string;
+  sku: string;
+  productName: string;
   type: StockAlertType;
   message: string;
   resolvedAt: string | null;
