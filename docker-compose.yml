@@ -1,8 +1,15 @@
 name: rfitness
 
+# Infra local opcional.
+#
+# Banco: o caminho recomendado é `supabase start` (Supabase CLI), que sobe
+# Postgres + Auth + Storage + Realtime iguais à produção. Este compose serve
+# para (a) rodar só um Postgres cru quando você não precisa de Auth/Storage e
+# (b) subir a Evolution API para desenvolver o agente de WhatsApp.
 services:
   postgres:
     image: postgres:16-alpine
+    profiles: ["postgres"]
     restart: unless-stopped
     environment:
       POSTGRES_USER: rfitness
@@ -18,25 +25,11 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - rfitness_redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  # Self-hosted WhatsApp gateway — habilitado a partir da Fase 6.
   # docker compose --profile whatsapp up -d
   evolution-api:
     image: atendai/evolution-api:latest
-    restart: unless-stopped
     profiles: ["whatsapp"]
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
@@ -45,42 +38,6 @@ services:
     volumes:
       - rfitness_evolution_data:/evolution/instances
 
-  # Build "productivo" completo da API/Web — opcional, útil para validar imagens
-  # antes de deploy. Dev diário usa `pnpm dev` local (mais rápido, hot reload).
-  # docker compose --profile full up -d --build
-  api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    profiles: ["full"]
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    env_file: .env
-    environment:
-      DATABASE_URL: postgresql://rfitness:rfitness@postgres:5432/rfitness?schema=public
-      REDIS_URL: redis://redis:6379
-    ports:
-      - "3001:3001"
-
-  web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
-    profiles: ["full"]
-    restart: unless-stopped
-    depends_on:
-      - api
-    env_file: .env
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3001
-    ports:
-      - "3000:3000"
-
 volumes:
   rfitness_postgres_data:
-  rfitness_redis_data:
   rfitness_evolution_data:
