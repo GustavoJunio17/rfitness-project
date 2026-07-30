@@ -4,15 +4,14 @@ export type OrderStatus = "PENDING" | "SEPARATING" | "OUT_FOR_DELIVERY" | "DELIV
 export type DeliveryType = "DELIVERY" | "PICKUP";
 
 export interface OrderItem {
-  id: string;
   variantId: string;
   sku: string;
+  productName: string;
   quantity: number;
-  unitPrice: string;
+  unitPrice: number;
 }
 
 export interface OrderStatusHistoryEntry {
-  id: string;
   status: OrderStatus;
   changedAt: string;
   changedBy: string | null;
@@ -20,21 +19,23 @@ export interface OrderStatusHistoryEntry {
 
 export interface Order {
   id: string;
-  gymId: string;
   orderNumber: number;
-  studentId: string | null;
+  status: OrderStatus;
   customerName: string;
   customerPhone: string;
   address: string | null;
   deliveryType: DeliveryType;
   paymentMethod: PaymentMethodType;
-  status: OrderStatus;
-  totalAmount: string;
+  totalAmount: number;
   notes: string | null;
+  studentId: string | null;
   createdAt: string;
+  updatedAt: string;
+  items: OrderItem[];
+  statusHistory: OrderStatusHistoryEntry[];
 }
 
 export interface OrderDetail extends Order {
-  items: OrderItem[];
-  statusHistory: OrderStatusHistoryEntry[];
+  /** Transições permitidas a partir do status atual, calculadas no servidor. */
+  allowedNextStatuses: OrderStatus[];
 }

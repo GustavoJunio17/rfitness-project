@@ -9,11 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useConversation, useConversations, useUpdateWhatsAppSettings } from "@/hooks/use-whatsapp";
-import { useAuthStore } from "@/store/auth-store";
+import { useSession } from "@/hooks/use-session";
 
 export default function WhatsAppPage() {
-  const user = useAuthStore((state) => state.user);
-  const isAdmin = user?.roles.includes("ADMIN");
+  const { data: session } = useSession();
+  const isAdmin = session?.roles.includes("ADMIN") ?? false;
 
   const { data: conversations, isLoading } = useConversations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -99,7 +99,7 @@ export default function WhatsAppPage() {
               >
                 <p className="font-medium">{item.studentName ?? item.phone}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {item.lastMessage?.content ?? "Sem mensagens"}
+                  {item.lastMessage ?? "Sem mensagens"}
                 </p>
               </button>
             ))}

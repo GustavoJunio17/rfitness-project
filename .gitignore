@@ -15,3 +15,6 @@ Thumbs.db
 *.tsbuildinfo
 .vscode/*
 !.vscode/extensions.json
+
+# Cache local do pnpm — nunca deve ser versionado
+.pnpm-store/

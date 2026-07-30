@@ -121,13 +121,13 @@ export default function FinanceiroPage() {
               <PieChart>
                 <Pie
                   data={paymentBreakdown ?? []}
-                  dataKey="total"
-                  nameKey="method"
+                  dataKey="revenue"
+                  nameKey="paymentMethod"
                   outerRadius={90}
-                  label={(entry) => PAYMENT_METHOD_LABELS[entry.method] ?? entry.method}
+                  label={(entry) => PAYMENT_METHOD_LABELS[entry.paymentMethod] ?? entry.paymentMethod}
                 >
                   {(paymentBreakdown ?? []).map((entry, index) => (
-                    <Cell key={entry.method} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                    <Cell key={entry.paymentMethod} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip formatter={(value: number) => currency(value)} />
@@ -179,7 +179,6 @@ export default function FinanceiroPage() {
                     <TableCell className={Number(entry.amount) < 0 ? "text-brand-red" : ""}>
                       {currency(Number(entry.amount))}
                     </TableCell>
-                    <TableCell>{currency(Number(entry.runningBalance))}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

@@ -1,0 +1,738 @@
+// RFitness — schema completo do domínio (normalizado, multi-tenant por gymId).
+//
+// Alvo: Postgres gerenciado pelo Supabase.
+// - `url` aponta para o pooler (PgBouncer, 6543), usado em runtime serverless.
+// - `directUrl` aponta para a conexão direta (5432), usada por `prisma migrate`.
+// - Credenciais de login NÃO vivem aqui: senha e sessão são do Supabase Auth
+//   (`auth.users`). `User.authUserId` é o elo entre o usuário de Auth e o perfil
+//   da academia.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =========================================================================
+// IDENTITY & ACCESS
+// =========================================================================
+
+model Gym {
+  id             String  @id @default(uuid())
+  name           String
+  slug           String  @unique
+  cnpj           String? @unique
+  email          String?
+  phone          String?
+  address        String?
+  primaryColor   String  @default("#E11D2E")
+  secondaryColor String  @default("#111111")
+  accentColor    String  @default("#FFFFFF")
+  timezone       String  @default("America/Sao_Paulo")
+  isActive       Boolean @default(true)
+
+  /// Instância da Evolution API desta academia — mapeia o webhook de mensagens
+  /// recebidas de volta para o tenant correto.
+  whatsappInstanceName String? @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users           User[]
+  roles           Role[]
+  auditLogs       AuditLog[]
+  students        Student[]
+  plans           Plan[]
+  categories      Category[]
+  brands          Brand[]
+  suppliers       Supplier[]
+  products        Product[]
+  sales           Sale[]
+  orders          Order[]
+  invoices        Invoice[]
+  billingRules    BillingRule[]
+  conversations   Conversation[]
+  notifications   Notification[]
+  cashFlowEntries CashFlowEntry[]
+  realtimeEvents  RealtimeEvent[]
+
+  @@map("gyms")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model User {
+  id String @id @default(uuid())
+
+  /// id do usuário em `auth.users` (Supabase Auth). Sem FK declarada porque a
+  /// tabela vive em outro schema, fora do alcance do Prisma; a integridade é
+  /// mantida no fluxo de cadastro (rollback do usuário de Auth se a transação
+  /// do perfil falhar).
+  authUserId String @unique
+
+  gymId       String
+  gym         Gym        @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  name        String
+  email       String
+  status      UserStatus @default(ACTIVE)
+  lastLoginAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  roles           UserRole[]
+  auditLogs       AuditLog[]
+  salesAsEmployee Sale[]        @relation("SaleEmployee")
+  agentActions    AgentAction[]
+
+  @@unique([gymId, email])
+  @@index([gymId])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  gymId       String
+  gym         Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  name        String // ADMIN, RECEPTION, STOCKIST, FINANCE, TRAINER
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@unique([gymId, name])
+  @@map("roles")
+}
+
+model Permission {
+  id          String  @id @default(uuid())
+  key         String  @unique // ex.: "inventory:write"
+  description String?
+
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  gymId      String
+  gym        Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String // ex.: "auth.login", "product.create"
+  entityType String?
+  entityId   String?
+  before     Json?
+  after      Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([gymId, createdAt])
+  @@index([gymId, entityType, entityId])
+  @@map("audit_logs")
+}
+
+// =========================================================================
+// ALUNOS
+// =========================================================================
+
+enum StudentStatus {
+  ACTIVE
+  OVERDUE
+  SUSPENDED
+  CANCELLED
+}
+
+model Plan {
+  id           String   @id @default(uuid())
+  gymId        String
+  gym          Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  price        Decimal  @db.Decimal(10, 2)
+  durationDays Int
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  subscriptions Subscription[]
+
+  @@unique([gymId, name])
+  @@index([gymId])
+  @@map("plans")
+}
+
+model Student {
+  id             String        @id @default(uuid())
+  gymId          String
+  gym            Gym           @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  name           String
+  cpf            String?
+  phone          String?
+  whatsapp       String?
+  email          String?
+  address        String?
+  trainerName    String?
+  status         StudentStatus @default(ACTIVE)
+  enrollmentDate DateTime      @default(now())
+  notes          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  subscriptions Subscription[]
+  goals         StudentGoal[]
+  studentNotes  StudentNote[]
+  sales         Sale[]
+  orders        Order[]
+  invoices      Invoice[]
+  conversation  Conversation?
+
+  @@unique([gymId, cpf])
+  @@index([gymId, status])
+  @@index([gymId, whatsapp])
+  @@map("students")
+}
+
+model Subscription {
+  id          String    @id @default(uuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  planId      String
+  plan        Plan      @relation(fields: [planId], references: [id])
+  startDate   DateTime  @default(now())
+  dueDate     DateTime
+  cancelledAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  invoices Invoice[]
+
+  @@index([studentId])
+  @@map("subscriptions")
+}
+
+model StudentGoal {
+  id          String    @id @default(uuid())
+  studentId   String
+  student     Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  description String
+  targetDate  DateTime?
+  achieved    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([studentId])
+  @@map("student_goals")
+}
+
+model StudentNote {
+  id        String   @id @default(uuid())
+  studentId String
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([studentId])
+  @@map("student_notes")
+}
+
+// =========================================================================
+// CATÁLOGO / ESTOQUE
+// =========================================================================
+
+model Category {
+  id    String @id @default(uuid())
+  gymId String
+  gym   Gym    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  name  String
+
+  products Product[]
+
+  @@unique([gymId, name])
+  @@map("categories")
+}
+
+model Brand {
+  id    String @id @default(uuid())
+  gymId String
+  gym   Gym    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  name  String
+
+  variants ProductVariant[]
+
+  @@unique([gymId, name])
+  @@map("brands")
+}
+
+model Supplier {
+  id        String   @id @default(uuid())
+  gymId     String
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  name      String
+  cnpj      String?
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime @default(now())
+
+  products Product[]
+
+  @@unique([gymId, name])
+  @@index([gymId])
+  @@map("suppliers")
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+}
+
+model Product {
+  id          String        @id @default(uuid())
+  gymId       String
+  gym         Gym           @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  categoryId  String?
+  category    Category?     @relation(fields: [categoryId], references: [id])
+  supplierId  String?
+  supplier    Supplier?     @relation(fields: [supplierId], references: [id])
+  name        String
+  description String?
+  status      ProductStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  variants ProductVariant[]
+
+  @@index([gymId, status])
+  @@map("products")
+}
+
+/// Cada combinação marca+sabor+peso é um SKU com estoque próprio.
+model ProductVariant {
+  id              String    @id @default(uuid())
+  productId       String
+  product         Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  brandId         String?
+  brand           Brand?    @relation(fields: [brandId], references: [id])
+  sku             String    @unique
+  flavor          String?
+  weight          String?
+  barcode         String?   @unique
+  photoUrl        String?
+  location        String?
+  batch           String?
+  expiresAt       DateTime?
+  costPrice       Decimal   @db.Decimal(10, 2)
+  salePrice       Decimal   @db.Decimal(10, 2)
+  minQuantity     Int       @default(0)
+  maxQuantity     Int?
+  currentQuantity Int       @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  stockMovements StockMovement[]
+  stockAlerts    StockAlert[]
+  saleItems      SaleItem[]
+  orderItems     OrderItem[]
+
+  @@index([productId])
+  @@map("product_variants")
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  SALE
+  EXCHANGE
+  LOSS
+  EXPIRATION
+  INVENTORY_ADJUSTMENT
+}
+
+model StockMovement {
+  id        String            @id @default(uuid())
+  variantId String
+  variant   ProductVariant    @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  type      StockMovementType
+
+  /// Delta real aplicado a `ProductVariant.currentQuantity` (pode ser negativo).
+  quantity Int
+
+  reason      String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([variantId, createdAt])
+  @@map("stock_movements")
+}
+
+enum StockAlertType {
+  LOW_STOCK
+  EXPIRING_SOON
+  EXPIRED
+  STALE
+}
+
+model StockAlert {
+  id         String         @id @default(uuid())
+  variantId  String
+  variant    ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  type       StockAlertType
+  message    String
+  resolvedAt DateTime?
+  createdAt  DateTime       @default(now())
+
+  @@index([variantId, resolvedAt])
+  @@map("stock_alerts")
+}
+
+// =========================================================================
+// VENDAS
+// =========================================================================
+
+enum PaymentMethodType {
+  CASH
+  CREDIT_CARD
+  DEBIT_CARD
+  PIX
+  BOLETO
+}
+
+model Sale {
+  id            String            @id @default(uuid())
+  gymId         String
+  gym           Gym               @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  studentId     String?
+  student       Student?          @relation(fields: [studentId], references: [id])
+  employeeId    String
+  employee      User              @relation("SaleEmployee", fields: [employeeId], references: [id])
+  paymentMethod PaymentMethodType
+  discount      Decimal           @default(0) @db.Decimal(10, 2)
+  totalAmount   Decimal           @db.Decimal(10, 2)
+  totalProfit   Decimal           @db.Decimal(10, 2)
+  createdAt     DateTime          @default(now())
+
+  items SaleItem[]
+
+  @@index([gymId, createdAt])
+  @@map("sales")
+}
+
+model SaleItem {
+  id        String         @id @default(uuid())
+  saleId    String
+  sale      Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  quantity  Int
+
+  /// Snapshot no momento da venda — histórico não muda se o preço do SKU mudar.
+  unitPrice Decimal @db.Decimal(10, 2)
+  unitCost  Decimal @db.Decimal(10, 2)
+
+  @@index([saleId])
+  @@index([variantId])
+  @@map("sale_items")
+}
+
+// =========================================================================
+// PEDIDOS
+// =========================================================================
+
+enum OrderStatus {
+  PENDING
+  SEPARATING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum DeliveryType {
+  DELIVERY
+  PICKUP
+}
+
+model Order {
+  id            String            @id @default(uuid())
+  gymId         String
+  gym           Gym               @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  orderNumber   Int
+  studentId     String?
+  student       Student?          @relation(fields: [studentId], references: [id])
+  customerName  String
+  customerPhone String
+  address       String?
+  deliveryType  DeliveryType      @default(PICKUP)
+  paymentMethod PaymentMethodType
+  status        OrderStatus       @default(PENDING)
+  totalAmount   Decimal           @db.Decimal(10, 2)
+  notes         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+
+  @@unique([gymId, orderNumber])
+  @@index([gymId, status])
+  @@index([gymId, createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String         @id @default(uuid())
+  orderId   String
+  order     Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variantId String
+  variant   ProductVariant @relation(fields: [variantId], references: [id])
+  quantity  Int
+  unitPrice Decimal        @db.Decimal(10, 2)
+
+  @@index([orderId])
+  @@index([variantId])
+  @@map("order_items")
+}
+
+model OrderStatusHistory {
+  id        String      @id @default(uuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  changedAt DateTime    @default(now())
+  changedBy String?
+
+  @@index([orderId])
+  @@map("order_status_history")
+}
+
+// =========================================================================
+// FINANCEIRO / COBRANÇA
+// =========================================================================
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model Invoice {
+  id             String        @id @default(uuid())
+  gymId          String
+  gym            Gym           @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student       @relation(fields: [studentId], references: [id])
+  subscriptionId String?
+  subscription   Subscription? @relation(fields: [subscriptionId], references: [id])
+  amount         Decimal       @db.Decimal(10, 2)
+  dueDate        DateTime
+  status         InvoiceStatus @default(PENDING)
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+
+  payments Payment[]
+
+  @@index([gymId, status, dueDate])
+  @@index([studentId])
+  @@map("invoices")
+}
+
+model Payment {
+  id        String            @id @default(uuid())
+  invoiceId String
+  invoice   Invoice           @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount    Decimal           @db.Decimal(10, 2)
+  method    PaymentMethodType
+  gatewayId String?
+  paidAt    DateTime          @default(now())
+
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+model CashFlowEntry {
+  id          String @id @default(uuid())
+  gymId       String
+  gym         Gym    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  description String
+
+  /// Positivo = entrada, negativo = saída.
+  amount Decimal @db.Decimal(10, 2)
+
+  category String
+
+  /// id da venda quando o lançamento foi gerado automaticamente por uma venda.
+  /// Unique garante idempotência: uma venda nunca gera duas entradas.
+  saleId String? @unique
+
+  occurredAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+
+  @@index([gymId, occurredAt])
+  @@map("cash_flow_entries")
+}
+
+/// Regras configuráveis de cobrança: -1, 0, +1, +3, +7, +15 dias.
+model BillingRule {
+  id    String @id @default(uuid())
+  gymId String
+  gym   Gym    @relation(fields: [gymId], references: [id], onDelete: Cascade)
+
+  /// Negativo = antes do vencimento, positivo = depois.
+  offsetDays Int
+
+  messageTemplate String
+  isActive        Boolean @default(true)
+
+  @@unique([gymId, offsetDays])
+  @@map("billing_rules")
+}
+
+// =========================================================================
+// WHATSAPP / AGENTE DE IA
+// =========================================================================
+
+enum ConversationChannel {
+  WHATSAPP
+}
+
+model Conversation {
+  id        String              @id @default(uuid())
+  gymId     String
+  gym       Gym                 @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  studentId String?             @unique
+  student   Student?            @relation(fields: [studentId], references: [id])
+  phone     String
+  channel   ConversationChannel @default(WHATSAPP)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  messages Message[]
+
+  @@unique([gymId, phone])
+  @@index([gymId, updatedAt])
+  @@map("conversations")
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+model Message {
+  id             String           @id @default(uuid())
+  conversationId String
+  conversation   Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction      MessageDirection
+  content        String
+
+  /// true = texto gerado pelo agente; false = template ou digitado por humano.
+  handledByAi Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+/// Auditoria específica das ações executadas pelo agente de IA.
+model AgentAction {
+  id        String   @id @default(uuid())
+  gymId     String?
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String // ex.: "whatsapp.reply", "order.create"
+  input     Json?
+  output    Json?
+  createdAt DateTime @default(now())
+
+  @@index([gymId, createdAt])
+  @@map("agent_actions")
+}
+
+// =========================================================================
+// NOTIFICAÇÕES
+// =========================================================================
+
+enum NotificationType {
+  NEW_ORDER
+  PAYMENT_RECEIVED
+  LOW_STOCK
+  NEW_STUDENT
+  IMPORTANT_MESSAGE
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  gymId     String
+  gym       Gym              @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([gymId, readAt])
+  @@index([gymId, createdAt])
+  @@map("notifications")
+}
+
+model NotificationTemplate {
+  id      String @id @default(uuid())
+  key     String @unique
+  channel String // "whatsapp" | "email" | "push"
+  content String
+
+  @@map("notification_templates")
+}
+
+// =========================================================================
+// TEMPO REAL
+// =========================================================================
+
+/// Fila de sinais para o Supabase Realtime.
+///
+/// O servidor insere uma linha; o browser assina Postgres Changes nesta tabela
+/// (a única com policy de SELECT para usuário autenticado, escopada por gymId) e
+/// reage refazendo a chamada REST — que aplica RBAC. O payload carrega só ids,
+/// nunca faturamento/lucro, então nada sensível trafega pelo canal.
+model RealtimeEvent {
+  id        BigInt   @id @default(autoincrement())
+  gymId     String
+  gym       Gym      @relation(fields: [gymId], references: [id], onDelete: Cascade)
+  type      String
+  payload   Json     @default("{}")
+  createdAt DateTime @default(now())
+
+  @@index([gymId, createdAt])
+  @@map("realtime_events")
+}

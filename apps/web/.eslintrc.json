@@ -1,3 +1,7 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": ["next/core-web-vitals"],
+  "ignorePatterns": ["node_modules", ".next"],
+  "rules": {
+    "@next/next/no-html-link-for-pages": "off"
+  }
 }

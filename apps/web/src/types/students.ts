@@ -2,27 +2,12 @@ export type StudentStatus = "ACTIVE" | "OVERDUE" | "SUSPENDED" | "CANCELLED";
 
 export interface Plan {
   id: string;
-  gymId: string;
   name: string;
   description: string | null;
-  price: string;
+  price: number;
   durationDays: number;
   isActive: boolean;
-}
-
-export interface Student {
-  id: string;
-  gymId: string;
-  name: string;
-  cpf: string | null;
-  phone: string | null;
-  whatsapp: string | null;
-  email: string | null;
-  address: string | null;
-  trainerName: string | null;
-  status: StudentStatus;
-  enrollmentDate: string;
-  notes: string | null;
+  activeSubscriptions: number;
 }
 
 export interface StudentSubscription {
@@ -47,8 +32,22 @@ export interface StudentNote {
   createdAt: string;
 }
 
-export interface StudentDetail extends Student {
+export interface Student {
+  id: string;
+  name: string;
+  cpf: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+  address: string | null;
+  trainerName: string | null;
+  status: StudentStatus;
+  enrollmentDate: string;
+  notes: string | null;
+  createdAt: string;
   subscriptions: StudentSubscription[];
   goals: StudentGoal[];
   studentNotes: StudentNote[];
 }
+
+export type StudentDetail = Student;
