@@ -14,7 +14,7 @@ rfitness/
 │   └── src/components  # UI
 ├── packages/core       # regras de negócio puras, sem I/O (94 testes)
 ├── packages/db         # Prisma schema, migrations e seed
-└── vercel.json         # build + Cron Jobs
+└── apps/web/vercel.json  # Cron Jobs (fica no Root Directory da Vercel)
 ```
 
 Três camadas, com uma regra clara em cada:
@@ -90,9 +90,12 @@ upload de foto (Storage).
 3. **Migrations** — `pnpm db:migrate:deploy` apontando para o projeto. A migration de RLS
    também adiciona `realtime_events` à publicação `supabase_realtime`; confirme em
    *Database → Replication* que a tabela está publicada.
-4. **Vercel** — importe o repositório. O `vercel.json` já define build command, output
-   directory e os dois Cron Jobs. Configure todas as variáveis do `.env.example` no projeto
-   (inclusive `CRON_SECRET`, que autentica as rotas de cron).
+4. **Vercel** — importe o repositório e defina **Root Directory: `apps/web`** (é onde está o
+   `package.json` com o `next`; a Vercel detecta o framework por ele). Deixe *Include source
+   files outside of the Root Directory* ligado, senão `packages/core` e `packages/db` não
+   chegam ao build. Build e output ficam nos defaults do preset Next.js — `apps/web/package.json`
+   já gera o Prisma Client antes do `next build`, e `apps/web/vercel.json` declara os Cron Jobs.
+   Configure todas as variáveis do `.env.example` no projeto (inclusive `CRON_SECRET`).
 5. **WhatsApp (opcional)** — suba a Evolution API (`docker compose --profile whatsapp up -d`),
    aponte o webhook da instância para
    `https://<seu-app>/api/whatsapp/webhook?token=<EVOLUTION_API_KEY>` e salve o nome da
