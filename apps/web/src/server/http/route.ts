@@ -42,22 +42,47 @@ function errorResponse(status: number, code: string, message: string, details?: 
  * que não diz o que fazer. A mensagem cita o problema, nunca a connection string.
  */
 function infraMessage(error: unknown): string | null {
-  const code = (error as { code?: unknown })?.code;
-  if (typeof code !== "string") return null;
+  // `PrismaClientKnownRequestError` usa `code`; `PrismaClientInitializationError`
+  // — justamente a de banco inalcançável ou DATABASE_URL ausente — usa
+  // `errorCode`. Olhar só um dos dois deixa o caso mais comum cair no 500 mudo.
+  const source = error as { code?: unknown; errorCode?: unknown; message?: unknown };
+  const code = typeof source?.code === "string" ? source.code : undefined;
+  const errorCode = typeof source?.errorCode === "string" ? source.errorCode : undefined;
+  const message = typeof source?.message === "string" ? source.message : "";
 
-  switch (code) {
+  switch (code ?? errorCode) {
     case "P1000":
     case "P1010":
       return "Banco de dados recusou a autenticação. Confira DATABASE_URL.";
     case "P1001":
     case "P1002":
       return "Não foi possível conectar ao banco de dados. Confira DATABASE_URL e se o projeto do Supabase está ativo.";
+    case "P1003":
+      return "O banco de dados informado em DATABASE_URL não existe.";
     case "P2021":
     case "P2022":
       return "O banco de dados ainda não foi migrado. Rode `pnpm db:migrate:deploy`.";
     default:
-      return null;
+      break;
   }
+
+  // Sem código: o Prisma sinaliza env ausente e schema não migrado só no texto.
+  if (/Environment variable not found/i.test(message)) {
+    const missing = /Environment variable not found:\s*([A-Z0-9_]+)/i.exec(message)?.[1];
+    return missing
+      ? `Variável de ambiente ${missing} não está definida no deploy.`
+      : "Falta uma variável de ambiente no deploy.";
+  }
+  // Só o texto do próprio Prisma: um ECONNREFUSED solto pode vir de qualquer
+  // integração (Evolution, Anthropic) e apontaria para o banco sem motivo.
+  if (/Can't reach database server|the database server at .* was reached/i.test(message)) {
+    return "Não foi possível conectar ao banco de dados. Confira DATABASE_URL e se o projeto do Supabase está ativo.";
+  }
+  if (/does not exist in the current database|relation .* does not exist/i.test(message)) {
+    return "O banco de dados ainda não foi migrado. Rode `pnpm db:migrate:deploy`.";
+  }
+
+  return null;
 }
 
 function queryToObject(url: URL): Record<string, string | string[]> {

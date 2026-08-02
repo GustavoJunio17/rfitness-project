@@ -179,6 +179,41 @@ describe("defineRoute — erros", () => {
     expect(JSON.stringify(payload)).not.toContain("supabase.co");
   });
 
+  it("erro de inicialização do Prisma (errorCode, não code) também vira 503", async () => {
+    const handler = defineRoute(
+      {
+        handler: async () => {
+          // Formato de PrismaClientInitializationError.
+          throw Object.assign(new Error("Can't reach database server at db.abc.supabase.co:5432"), {
+            errorCode: "P1001",
+          });
+        },
+      },
+      deps(adminAuth),
+    );
+
+    const response = await handler(request());
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "CONFIG" } });
+  });
+
+  it("env ausente detectada pela mensagem do Prisma vira 503 nomeando a variável", async () => {
+    const handler = defineRoute(
+      {
+        handler: async () => {
+          throw new Error("error: Environment variable not found: DATABASE_URL.");
+        },
+      },
+      deps(adminAuth),
+    );
+
+    const response = await handler(request());
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "CONFIG", message: expect.stringContaining("DATABASE_URL") },
+    });
+  });
+
   it("banco sem migration vira 503 dizendo o que rodar", async () => {
     const handler = defineRoute(
       {
