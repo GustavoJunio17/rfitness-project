@@ -253,6 +253,27 @@ describe("defineRoute — erros", () => {
     expect(JSON.stringify(payload)).not.toContain("s3nh4Secreta");
   });
 
+  it("connection string malformada vira 503 dizendo como corrigir", async () => {
+    const handler = defineRoute(
+      {
+        handler: async () => {
+          const error = new Error(
+            "The provided database string is invalid. The provided arguments are not supported in database URL.",
+          );
+          error.name = "PrismaClientInitializationError";
+          throw error;
+        },
+      },
+      deps(adminAuth),
+    );
+
+    const response = await handler(request());
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "CONFIG", message: expect.stringContaining("DATABASE_URL") },
+    });
+  });
+
   it("204 quando o handler não devolve conteúdo", async () => {
     const handler = defineRoute({ handler: async () => undefined }, deps(adminAuth));
     const response = await handler(request());

@@ -66,7 +66,15 @@ function infraMessage(error: unknown): string | null {
       break;
   }
 
-  // Sem código: o Prisma sinaliza env ausente e schema não migrado só no texto.
+  // Sem código: o Prisma sinaliza env ausente, URL malformada e schema não
+  // migrado só no texto.
+  if (/provided database string is invalid|arguments are not supported in database URL/i.test(message)) {
+    return (
+      "DATABASE_URL está malformada. Use apenas ?pgbouncer=true&connection_limit=1 " +
+      "(o parâmetro supa=... que o Supabase inclui não é aceito pelo Prisma) e " +
+      "escape caracteres especiais da senha: @ vira %40, # vira %23."
+    );
+  }
   if (/Environment variable not found/i.test(message)) {
     const missing = /Environment variable not found:\s*([A-Z0-9_]+)/i.exec(message)?.[1];
     return missing
