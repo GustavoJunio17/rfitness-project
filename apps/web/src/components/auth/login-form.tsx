@@ -3,11 +3,13 @@
 import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Loader2 } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { AuthError, AuthShell } from "@/components/auth/auth-shell";
+import { PasswordInput } from "@/components/auth/password-input";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function LoginForm() {
   const router = useRouter();
@@ -46,49 +48,59 @@ export function LoginForm() {
   }
 
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader className="items-center text-center">
-        <div className="mb-2 text-3xl font-black tracking-tight">
-          <span className="text-brand">R</span>Fitness
+    <AuthShell
+      title="Entrar na sua conta"
+      subtitle="Acesse o painel da sua academia."
+      footer={
+        <>
+          Não tem conta?{" "}
+          <Link href="/cadastro" className="font-medium text-white hover:text-brand-400">
+            Cadastrar academia
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4" noValidate>
+        <div className="space-y-1.5">
+          <Label htmlFor="email">E-mail</Label>
+          <Input
+            id="email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoFocus
+            placeholder="voce@academia.com.br"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
         </div>
-        <CardTitle>Entrar na sua conta</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">E-mail</Label>
-            <Input
-              id="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="password">Senha</Label>
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          {error && <p className="text-sm text-brand">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Entrando..." : "Entrar"}
-          </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            Não tem conta?{" "}
-            <Link href="/cadastro" className="font-medium text-brand hover:underline">
-              Cadastrar academia
-            </Link>
-          </p>
-        </form>
-      </CardContent>
-    </Card>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Senha</Label>
+          <PasswordInput
+            id="password"
+            autoComplete="current-password"
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </div>
+
+        {error && <AuthError message={error} />}
+
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+              Entrando...
+            </>
+          ) : (
+            "Entrar"
+          )}
+        </Button>
+      </form>
+    </AuthShell>
   );
 }

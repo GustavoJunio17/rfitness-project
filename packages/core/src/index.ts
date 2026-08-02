@@ -9,3 +9,5 @@ export * from "./orders/order-totals";
 export * from "./finance/analytics";
 export * from "./students/subscription";
 export * from "./rbac/roles";
+export * from "./identity/password-strength";
+export * from "./identity/gym-slug";

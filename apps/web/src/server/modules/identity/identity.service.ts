@@ -1,4 +1,12 @@
-import { conflictError, notFoundError, validationError, type Role } from "@rfitness/core";
+import {
+  buildGymSlugBase,
+  conflictError,
+  evaluatePassword,
+  notFoundError,
+  resolveGymSlug,
+  validationError,
+  type Role,
+} from "@rfitness/core";
 import { prisma } from "../../db";
 import { getSupabaseAdmin } from "../../supabase/admin";
 import { writeAuditLog } from "../../audit/audit-log";
@@ -9,7 +17,6 @@ const BILLING_OFFSETS = [-1, 0, 1, 3, 7, 15];
 
 export interface RegisterGymInput {
   gymName: string;
-  gymSlug: string;
   adminName: string;
   adminEmail: string;
   adminPassword: string;
@@ -36,13 +43,21 @@ export async function registerGym(
   input: RegisterGymInput,
   meta: { ip: string | null; userAgent: string | null },
 ): Promise<{ gymId: string; userId: string }> {
-  const slug = input.gymSlug.trim().toLowerCase();
-  if (!/^[a-z0-9-]{3,40}$/.test(slug)) {
-    throw validationError("O identificador da academia deve ter 3 a 40 caracteres (a-z, 0-9 e hífen).");
+  // A força da senha é conferida aqui também: o medidor da tela é conveniência,
+  // não barreira — quem chama a API direto passa pela mesma regra.
+  const strength = evaluatePassword(input.adminPassword, [input.adminName, input.adminEmail, input.gymName]);
+  if (!strength.acceptable) {
+    throw validationError(strength.hint ?? "Escolha uma senha mais forte.");
   }
 
-  const existing = await prisma.gym.findUnique({ where: { slug }, select: { id: true } });
-  if (existing) throw conflictError("Já existe uma academia com esse identificador.");
+  // Slug interno derivado do nome; colisão resolve com sufixo em vez de erro na
+  // cara do usuário, que nem sabe que esse identificador existe.
+  const base = buildGymSlugBase(input.gymName);
+  const conflicting = await prisma.gym.findMany({
+    where: { slug: { startsWith: base } },
+    select: { slug: true },
+  });
+  const slug = resolveGymSlug(input.gymName, conflicting.map((gym) => gym.slug));
 
   const supabase = getSupabaseAdmin();
 

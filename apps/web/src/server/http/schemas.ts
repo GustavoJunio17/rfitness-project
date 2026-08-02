@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { PASSWORD_MIN_LENGTH } from "@rfitness/core";
 
 /** Schemas compartilhados pelos route handlers. Um só lugar para os enums. */
 
@@ -29,12 +30,13 @@ const optionalString = z.string().trim().max(500).optional().nullable();
 const money = z.number().finite().min(0).max(99_999_999);
 const positiveInt = z.number().int().positive();
 
+// O slug da academia não entra aqui de propósito: é interno e derivado do nome
+// no servidor, para o cliente não escolher nem descobrir o identificador.
 export const registerGymSchema = z.object({
   gymName: z.string().trim().min(2).max(120),
-  gymSlug: z.string().trim().min(3).max(40),
   adminName: z.string().trim().min(2).max(120),
   adminEmail: z.string().trim().email(),
-  adminPassword: z.string().min(8, "A senha deve ter no mínimo 8 caracteres.").max(72),
+  adminPassword: z.string().min(PASSWORD_MIN_LENGTH, "A senha deve ter no mínimo 8 caracteres.").max(72),
 });
 
 export const cartItemsSchema = z
