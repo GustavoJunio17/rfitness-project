@@ -42,22 +42,67 @@ function errorResponse(status: number, code: string, message: string, details?: 
  * que não diz o que fazer. A mensagem cita o problema, nunca a connection string.
  */
 function infraMessage(error: unknown): string | null {
-  const code = (error as { code?: unknown })?.code;
-  if (typeof code !== "string") return null;
+  // `PrismaClientKnownRequestError` usa `code`; `PrismaClientInitializationError`
+  // — justamente a de banco inalcançável ou DATABASE_URL ausente — usa
+  // `errorCode`. Olhar só um dos dois deixa o caso mais comum cair no 500 mudo.
+  const source = error as { code?: unknown; errorCode?: unknown; message?: unknown };
+  const code = typeof source?.code === "string" ? source.code : undefined;
+  const errorCode = typeof source?.errorCode === "string" ? source.errorCode : undefined;
+  const message = typeof source?.message === "string" ? source.message : "";
 
-  switch (code) {
+  switch (code ?? errorCode) {
     case "P1000":
     case "P1010":
       return "Banco de dados recusou a autenticação. Confira DATABASE_URL.";
     case "P1001":
     case "P1002":
       return "Não foi possível conectar ao banco de dados. Confira DATABASE_URL e se o projeto do Supabase está ativo.";
+    case "P1003":
+      return "O banco de dados informado em DATABASE_URL não existe.";
     case "P2021":
     case "P2022":
       return "O banco de dados ainda não foi migrado. Rode `pnpm db:migrate:deploy`.";
     default:
-      return null;
+      break;
   }
+
+  // Sem código: o Prisma sinaliza env ausente, URL malformada e schema não
+  // migrado só no texto.
+  if (/provided database string is invalid|arguments are not supported in database URL/i.test(message)) {
+    return (
+      "DATABASE_URL está malformada. Use apenas ?pgbouncer=true&connection_limit=1 " +
+      "(o parâmetro supa=... que o Supabase inclui não é aceito pelo Prisma) e " +
+      "escape caracteres especiais da senha: @ vira %40, # vira %23."
+    );
+  }
+  if (/Environment variable not found/i.test(message)) {
+    const missing = /Environment variable not found:\s*([A-Z0-9_]+)/i.exec(message)?.[1];
+    return missing
+      ? `Variável de ambiente ${missing} não está definida no deploy.`
+      : "Falta uma variável de ambiente no deploy.";
+  }
+  // Só o texto do próprio Prisma: um ECONNREFUSED solto pode vir de qualquer
+  // integração (Evolution, Anthropic) e apontaria para o banco sem motivo.
+  if (/Can't reach database server|the database server at .* was reached/i.test(message)) {
+    return "Não foi possível conectar ao banco de dados. Confira DATABASE_URL e se o projeto do Supabase está ativo.";
+  }
+  if (/does not exist in the current database|relation .* does not exist/i.test(message)) {
+    return "O banco de dados ainda não foi migrado. Rode `pnpm db:migrate:deploy`.";
+  }
+
+  return null;
+}
+
+/**
+ * Remove segredo de mensagem de erro antes de ela sair na resposta: credencial
+ * embutida em URL (`postgres://user:senha@host`), chave de API e token JWT.
+ */
+function sanitizeMessage(message: string): string {
+  return message
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, "$1***@")
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "***")
+    .replace(/\b(sb|sk|pk|rk)_[A-Za-z0-9_-]{8,}/g, "***")
+    .slice(0, 400);
 }
 
 function queryToObject(url: URL): Record<string, string | string[]> {
@@ -156,7 +201,29 @@ export function defineRoute<TBody = undefined, TQuery = undefined, TParams = und
       const infra = infraMessage(error);
       if (infra) return errorResponse(503, "CONFIG", infra);
 
-      return errorResponse(500, "INTERNAL", "Erro interno inesperado.");
+      // Classe e código da exceção viajam junto (nunca a mensagem, que pode
+      // conter dado do banco ou da requisição): sem isso, um 500 em produção só
+      // é diagnosticável com acesso ao log da função.
+      const source = error as { name?: unknown; code?: unknown; errorCode?: unknown; message?: unknown };
+      const type = typeof source?.name === "string" ? source.name : "Error";
+      const details: { type: string; code: string | null; reason?: string } = {
+        type,
+        code:
+          typeof source?.code === "string"
+            ? source.code
+            : typeof source?.errorCode === "string"
+              ? source.errorCode
+              : null,
+      };
+
+      // Falha de inicialização do Prisma não tem código: engine ausente no
+      // bundle, env sem valor e URL malformada chegam todas iguais, e a causa
+      // vive só no texto. Vai sanitizado — credencial de URL é apagada antes.
+      if (type === "PrismaClientInitializationError" && typeof source.message === "string") {
+        details.reason = sanitizeMessage(source.message);
+      }
+
+      return errorResponse(500, "INTERNAL", "Erro interno inesperado.", details);
     }
   };
 }

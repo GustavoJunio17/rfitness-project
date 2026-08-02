@@ -15,6 +15,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
+/**
+ * Resumo copiável da falha inesperada — `PrismaClientKnownRequestError · P2021`.
+ * Só para 5xx: em erro de validação o usuário já tem a mensagem que importa.
+ */
+function formatErrorReference(error: ApiError): string | null {
+  if (error.status < 500) return null;
+  const details = error.details as { type?: string; code?: string | null; reason?: string } | undefined;
+  const parts = [details?.type, details?.code, details?.reason].filter(Boolean);
+  return parts.length > 0 ? `${error.status} · ${parts.join(" · ")}` : `${error.status}`;
+}
+
 export function RegisterForm() {
   const router = useRouter();
   const [gymName, setGymName] = useState("");
@@ -23,6 +34,7 @@ export function RegisterForm() {
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorReference, setErrorReference] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Reavaliada a cada tecla; o nome/e-mail/academia entram como contexto para
@@ -39,6 +51,7 @@ export function RegisterForm() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setErrorReference(null);
 
     if (!strength.acceptable) {
       setError(strength.hint ?? "Escolha uma senha mais forte.");
@@ -74,6 +87,7 @@ export function RegisterForm() {
       router.refresh();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Não foi possível concluir o cadastro.");
+      setErrorReference(err instanceof ApiError ? formatErrorReference(err) : null);
     } finally {
       setLoading(false);
     }
@@ -182,7 +196,7 @@ export function RegisterForm() {
           )}
         </div>
 
-        {error && <AuthError message={error} />}
+        {error && <AuthError message={error} reference={errorReference} />}
 
         <Button type="submit" className="w-full" disabled={!canSubmit}>
           {loading ? (

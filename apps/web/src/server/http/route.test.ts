@@ -179,6 +179,41 @@ describe("defineRoute — erros", () => {
     expect(JSON.stringify(payload)).not.toContain("supabase.co");
   });
 
+  it("erro de inicialização do Prisma (errorCode, não code) também vira 503", async () => {
+    const handler = defineRoute(
+      {
+        handler: async () => {
+          // Formato de PrismaClientInitializationError.
+          throw Object.assign(new Error("Can't reach database server at db.abc.supabase.co:5432"), {
+            errorCode: "P1001",
+          });
+        },
+      },
+      deps(adminAuth),
+    );
+
+    const response = await handler(request());
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "CONFIG" } });
+  });
+
+  it("env ausente detectada pela mensagem do Prisma vira 503 nomeando a variável", async () => {
+    const handler = defineRoute(
+      {
+        handler: async () => {
+          throw new Error("error: Environment variable not found: DATABASE_URL.");
+        },
+      },
+      deps(adminAuth),
+    );
+
+    const response = await handler(request());
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "CONFIG", message: expect.stringContaining("DATABASE_URL") },
+    });
+  });
+
   it("banco sem migration vira 503 dizendo o que rodar", async () => {
     const handler = defineRoute(
       {
@@ -193,6 +228,49 @@ describe("defineRoute — erros", () => {
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({
       error: { code: "CONFIG", message: expect.stringContaining("db:migrate:deploy") },
+    });
+  });
+
+  it("falha de inicialização do Prisma expõe a causa sem a credencial da URL", async () => {
+    const handler = defineRoute(
+      {
+        handler: async () => {
+          const error = new Error(
+            'Query engine library not found. datasource: postgresql://postgres.abc:s3nh4Secreta@aws-0.pooler.supabase.com:6543/postgres',
+          );
+          error.name = "PrismaClientInitializationError";
+          throw error;
+        },
+      },
+      deps(adminAuth),
+    );
+
+    const response = await handler(request());
+    expect(response.status).toBe(500);
+    const payload = await response.json();
+    expect(payload.error.details.type).toBe("PrismaClientInitializationError");
+    expect(payload.error.details.reason).toContain("Query engine library not found");
+    expect(JSON.stringify(payload)).not.toContain("s3nh4Secreta");
+  });
+
+  it("connection string malformada vira 503 dizendo como corrigir", async () => {
+    const handler = defineRoute(
+      {
+        handler: async () => {
+          const error = new Error(
+            "The provided database string is invalid. The provided arguments are not supported in database URL.",
+          );
+          error.name = "PrismaClientInitializationError";
+          throw error;
+        },
+      },
+      deps(adminAuth),
+    );
+
+    const response = await handler(request());
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "CONFIG", message: expect.stringContaining("DATABASE_URL") },
     });
   });
 

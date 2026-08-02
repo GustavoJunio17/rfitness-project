@@ -1,3 +1,8 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -6,6 +11,20 @@ const nextConfig = {
   // O Prisma carrega os engines nativos em runtime; empacotá-lo quebra o bundle
   // da função serverless.
   serverExternalPackages: ["@prisma/client", "prisma"],
+  // Sem isto o tracing parte de `apps/web` e ignora o node_modules da raiz do
+  // workspace: o engine nativo do Prisma fica de fora do bundle da função e o
+  // client falha ao inicializar em runtime, sem código de erro.
+  outputFileTracingRoot: repoRoot,
+  outputFileTracingIncludes: {
+    // As duas formas do glob de propósito: o caminho é resolvido a partir do
+    // diretório do app em algumas versões e da raiz do tracing em outras.
+    "/api/**/*": [
+      "../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/*.node",
+      "../../node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/schema.prisma",
+      "node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/*.node",
+      "node_modules/.pnpm/@prisma+client*/node_modules/.prisma/client/schema.prisma",
+    ],
+  },
   images: {
     remotePatterns: [
       {
