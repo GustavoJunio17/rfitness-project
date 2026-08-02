@@ -100,38 +100,38 @@ export function RegisterForm() {
             id="gymName"
             autoFocus
             autoComplete="organization"
-            placeholder="Ex.: Bora Bill"
+            placeholder="Ex.: Academia Corpo em Forma"
             value={gymName}
             onChange={(e) => setGymName(e.target.value)}
             required
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="adminName">Seu nome</Label>
-            <Input
-              id="adminName"
-              autoComplete="name"
-              placeholder="Nome e sobrenome"
-              value={adminName}
-              onChange={(e) => setAdminName(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="adminEmail">E-mail</Label>
-            <Input
-              id="adminEmail"
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              placeholder="voce@academia.com.br"
-              value={adminEmail}
-              onChange={(e) => setAdminEmail(e.target.value)}
-              required
-            />
-          </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="adminName">Seu nome</Label>
+          <Input
+            id="adminName"
+            autoComplete="name"
+            placeholder="Ex.: Maria Silva"
+            value={adminName}
+            onChange={(e) => setAdminName(e.target.value)}
+            required
+          />
+        </div>
+
+        {/* E-mail em linha própria: lado a lado o campo cortava endereços longos. */}
+        <div className="space-y-1.5">
+          <Label htmlFor="adminEmail">E-mail</Label>
+          <Input
+            id="adminEmail"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            placeholder="voce@exemplo.com"
+            value={adminEmail}
+            onChange={(e) => setAdminEmail(e.target.value)}
+            required
+          />
         </div>
 
         <div className="space-y-1.5">
