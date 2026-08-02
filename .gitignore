@@ -18,3 +18,4 @@ Thumbs.db
 
 # Cache local do pnpm — nunca deve ser versionado
 .pnpm-store/
+.vercel
