@@ -44,6 +44,17 @@ export const GET = defineRoute({
 
     const status = config === "ok" && database === "ok" && migrations === "ok" ? "ok" : "degraded";
 
-    return { status, checks: { config, database, migrations }, timestamp: new Date().toISOString() };
+    return {
+      status,
+      checks: { config, database, migrations },
+      // Sem isto não dá para saber se a resposta veio do build atual ou de um
+      // deploy antigo — ler um health obsoleto já custou horas de diagnóstico.
+      build: {
+        commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+        branch: process.env.VERCEL_GIT_COMMIT_REF ?? "local",
+        env: process.env.VERCEL_ENV ?? "development",
+      },
+      timestamp: new Date().toISOString(),
+    };
   },
 });

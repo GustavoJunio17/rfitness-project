@@ -181,7 +181,20 @@ export function defineRoute<TBody = undefined, TQuery = undefined, TParams = und
       const infra = infraMessage(error);
       if (infra) return errorResponse(503, "CONFIG", infra);
 
-      return errorResponse(500, "INTERNAL", "Erro interno inesperado.");
+      // Classe e código da exceção viajam junto (nunca a mensagem, que pode
+      // conter dado do banco ou da requisição): sem isso, um 500 em produção só
+      // é diagnosticável com acesso ao log da função.
+      const source = error as { name?: unknown; code?: unknown; errorCode?: unknown };
+      const details = {
+        type: typeof source?.name === "string" ? source.name : "Error",
+        code:
+          typeof source?.code === "string"
+            ? source.code
+            : typeof source?.errorCode === "string"
+              ? source.errorCode
+              : null,
+      };
+      return errorResponse(500, "INTERNAL", "Erro interno inesperado.", details);
     }
   };
 }
