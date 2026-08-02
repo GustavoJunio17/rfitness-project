@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton, SkeletonTableRows } from "@/components/ui/skeleton";
 import { useProducts } from "@/hooks/use-catalog";
 import { useCreateSale, useSales } from "@/hooks/use-sales";
 import { useStudents } from "@/hooks/use-students";
@@ -46,9 +47,11 @@ export default function VendasPage() {
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null);
 
-  const { data: products } = useProducts({ search: search || undefined });
-  const { data: sales } = useSales();
-  const { data: customerResults } = useStudents({ search: customerSearch || undefined });
+  const { data: products, isFetching: isSearchingProducts } = useProducts({ search: search || undefined });
+  const { data: sales, isPending: isSalesPending } = useSales();
+  const { data: customerResults, isFetching: isSearchingCustomers } = useStudents({
+    search: customerSearch || undefined,
+  });
   const createSale = useCreateSale();
 
   const searchResults = useMemo(
@@ -144,8 +147,17 @@ export default function VendasPage() {
           </div>
 
           {search && (
-            <div className="max-h-64 overflow-y-auto rounded-md border border-border">
-              {searchResults.length === 0 && (
+            <div className="max-h-64 overflow-y-auto rounded-md border border-border" aria-busy={isSearchingProducts}>
+              {/* Busca refaz a query a cada tecla: `isFetching` mostra o skeleton
+                  também nas buscas seguintes, não só na primeira. */}
+              {isSearchingProducts &&
+                Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="flex items-center justify-between border-b border-border p-3 last:border-0">
+                    <Skeleton className="h-4 w-48" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                ))}
+              {!isSearchingProducts && searchResults.length === 0 && (
                 <p className="p-3 text-sm text-muted-foreground">Nenhum resultado.</p>
               )}
               {searchResults.map(({ product, variant }) => (
@@ -254,8 +266,14 @@ export default function VendasPage() {
                     onChange={(e) => setCustomerSearch(e.target.value)}
                   />
                   {customerSearch && (
-                    <div className="max-h-32 overflow-y-auto rounded-md border border-border">
-                      {(customerResults ?? []).length === 0 && (
+                    <div className="max-h-32 overflow-y-auto rounded-md border border-border" aria-busy={isSearchingCustomers}>
+                      {isSearchingCustomers &&
+                        Array.from({ length: 2 }).map((_, index) => (
+                          <div key={index} className="border-b border-border p-2 last:border-0">
+                            <Skeleton className="h-4 w-36" />
+                          </div>
+                        ))}
+                      {!isSearchingCustomers && (customerResults ?? []).length === 0 && (
                         <p className="p-2 text-xs text-muted-foreground">Nenhum aluno encontrado.</p>
                       )}
                       {customerResults?.map((student) => (
@@ -334,8 +352,9 @@ export default function VendasPage() {
               <TableHead>Lucro</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {(sales ?? []).length === 0 && (
+          <TableBody aria-busy={isSalesPending}>
+            {isSalesPending && <SkeletonTableRows rows={5} columns={5} />}
+            {!isSalesPending && (sales ?? []).length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-muted-foreground">
                   Nenhuma venda registrada ainda.

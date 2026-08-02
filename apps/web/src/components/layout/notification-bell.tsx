@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMarkNotificationRead, useNotifications, useUnreadNotificationsCount } from "@/hooks/use-notifications";
 import type { NotificationType } from "@/types/notifications";
 
@@ -19,7 +20,7 @@ export function NotificationBell() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const { data: unreadCount } = useUnreadNotificationsCount();
-  const { data: notifications } = useNotifications();
+  const { data: notifications, isPending: isNotificationsPending } = useNotifications();
   const markRead = useMarkNotificationRead();
 
   useEffect(() => {
@@ -54,8 +55,19 @@ export function NotificationBell() {
       {open && (
         <div className="absolute right-0 z-50 mt-2 w-80 rounded-md border border-border bg-card shadow-lg">
           <div className="border-b border-border p-3 text-sm font-semibold">Notificações</div>
-          <div className="max-h-96 overflow-y-auto">
-            {(notifications ?? []).length === 0 && (
+          <div className="max-h-96 overflow-y-auto" aria-busy={isNotificationsPending}>
+            {isNotificationsPending &&
+              Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="space-y-2 border-b border-border p-3 last:border-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              ))}
+            {!isNotificationsPending && (notifications ?? []).length === 0 && (
               <p className="p-4 text-center text-sm text-muted-foreground">Nenhuma notificação.</p>
             )}
             {notifications?.map((notification) => (

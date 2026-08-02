@@ -3,6 +3,7 @@
 import { Dialog, DialogCloseButton, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Skeleton, SkeletonList, SkeletonText } from "@/components/ui/skeleton";
 import { useOrder, useUpdateOrderStatus } from "@/hooks/use-orders";
 import { ApiError } from "@/lib/api-client";
 import type { OrderStatus } from "@/types/orders";
@@ -43,7 +44,7 @@ export function OrderDetailDialog({
   orderId: string | null;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { data: order } = useOrder(orderId);
+  const { data: order, isPending } = useOrder(orderId);
   const updateStatus = useUpdateOrderStatus();
   const [error, setError] = useState<string | null>(null);
 
@@ -61,9 +62,27 @@ export function OrderDetailDialog({
   return (
     <Dialog open={Boolean(orderId)} onOpenChange={onOpenChange}>
       <DialogHeader>
-        <DialogTitle>{order ? `Pedido #${order.orderNumber}` : "Carregando..."}</DialogTitle>
+        <DialogTitle>{order ? `Pedido #${order.orderNumber}` : <Skeleton className="h-6 w-40" />}</DialogTitle>
         <DialogCloseButton onClick={() => onOpenChange(false)} />
       </DialogHeader>
+
+      {isPending && (
+        <div className="space-y-6" aria-busy>
+          <Skeleton className="h-6 w-72" />
+          <section className="space-y-2">
+            <Skeleton className="h-4 w-20" />
+            <SkeletonList items={3} />
+            <div className="flex justify-between border-t border-border pt-2">
+              <Skeleton className="h-5 w-16" />
+              <Skeleton className="h-5 w-24" />
+            </div>
+          </section>
+          <section className="space-y-2">
+            <Skeleton className="h-4 w-40" />
+            <SkeletonText lines={3} />
+          </section>
+        </div>
+      )}
 
       {order && (
         <div className="space-y-6">

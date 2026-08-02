@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useProducts } from "@/hooks/use-catalog";
 import { useCreateOrder } from "@/hooks/use-orders";
 import { ApiError } from "@/lib/api-client";
@@ -48,7 +49,7 @@ export function OrderFormDialog({ open, onOpenChange }: OrderFormDialogProps) {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>("CASH");
   const [error, setError] = useState<string | null>(null);
 
-  const { data: products } = useProducts({ search: search || undefined });
+  const { data: products, isFetching: isSearching } = useProducts({ search: search || undefined });
   const createOrder = useCreateOrder();
 
   const searchResults = useMemo(
@@ -176,8 +177,17 @@ export function OrderFormDialog({ open, onOpenChange }: OrderFormDialogProps) {
           <Label>Itens</Label>
           <Input placeholder="Buscar produto ou SKU..." value={search} onChange={(e) => setSearch(e.target.value)} />
           {search && (
-            <div className="max-h-40 overflow-y-auto rounded-md border border-border">
-              {searchResults.length === 0 && <p className="p-2 text-xs text-muted-foreground">Nenhum resultado.</p>}
+            <div className="max-h-40 overflow-y-auto rounded-md border border-border" aria-busy={isSearching}>
+              {isSearching &&
+                Array.from({ length: 3 }).map((_, index) => (
+                  <div key={index} className="flex justify-between border-b border-border p-2 last:border-0">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-4 w-20" />
+                  </div>
+                ))}
+              {!isSearching && searchResults.length === 0 && (
+                <p className="p-2 text-xs text-muted-foreground">Nenhum resultado.</p>
+              )}
               {searchResults.map(({ product, variant }) => (
                 <button
                   key={variant.id}

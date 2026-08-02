@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   useBrands,
   useCategories,
@@ -49,9 +50,9 @@ interface ProductFormDialogProps {
 }
 
 export function ProductFormDialog({ open, onOpenChange }: ProductFormDialogProps) {
-  const { data: categories } = useCategories();
+  const { data: categories, isPending: isCategoriesPending } = useCategories();
   const { data: brands } = useBrands();
-  const { data: suppliers } = useSuppliers();
+  const { data: suppliers, isPending: isSuppliersPending } = useSuppliers();
   const createCategory = useCreateCategory();
   const createBrand = useCreateBrand();
   const createProduct = useCreateProduct();
@@ -139,14 +140,20 @@ export function ProductFormDialog({ open, onOpenChange }: ProductFormDialogProps
           </div>
           <div className="space-y-2">
             <Label htmlFor="product-category">Categoria</Label>
-            <Select id="product-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
-              <option value="">Sem categoria</option>
-              {categories?.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </Select>
+            {/* Select vazio parece "não há categorias"; o skeleton diz que ainda
+                estão chegando. */}
+            {isCategoriesPending ? (
+              <Skeleton className="h-10 w-full" />
+            ) : (
+              <Select id="product-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
+                <option value="">Sem categoria</option>
+                {categories?.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+              </Select>
+            )}
             <div className="flex gap-2">
               <Input
                 placeholder="Nova categoria"
@@ -160,14 +167,18 @@ export function ProductFormDialog({ open, onOpenChange }: ProductFormDialogProps
           </div>
           <div className="space-y-2">
             <Label htmlFor="product-supplier">Fornecedor</Label>
-            <Select id="product-supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
-              <option value="">Sem fornecedor</option>
-              {suppliers?.map((supplier) => (
-                <option key={supplier.id} value={supplier.id}>
-                  {supplier.name}
-                </option>
-              ))}
-            </Select>
+            {isSuppliersPending ? (
+              <Skeleton className="h-10 w-full" />
+            ) : (
+              <Select id="product-supplier" value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
+                <option value="">Sem fornecedor</option>
+                {suppliers?.map((supplier) => (
+                  <option key={supplier.id} value={supplier.id}>
+                    {supplier.name}
+                  </option>
+                ))}
+              </Select>
+            )}
           </div>
         </div>
 

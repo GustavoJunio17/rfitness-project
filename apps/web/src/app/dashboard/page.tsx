@@ -2,6 +2,7 @@
 
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SkeletonChart, SkeletonStatCards } from "@/components/ui/skeleton";
 import { useFinanceSummary, useRevenueSeries } from "@/hooks/use-finance";
 import { useOpenOrdersCount } from "@/hooks/use-orders";
 import { ApiError } from "@/lib/api-client";
@@ -16,8 +17,8 @@ const FUTURE_PHASE_CARDS = [
 ];
 
 export default function DashboardPage() {
-  const { data: summary, error: summaryError } = useFinanceSummary();
-  const { data: series } = useRevenueSeries(30);
+  const { data: summary, error: summaryError, isPending: isSummaryPending } = useFinanceSummary();
+  const { data: series, isPending: isSeriesPending } = useRevenueSeries(30);
   const { data: openOrdersCount } = useOpenOrdersCount();
 
   if (summaryError instanceof ApiError && summaryError.status === 403) {
@@ -53,7 +54,9 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-busy={isSummaryPending}>
+        {/* Mesma contagem de cartões da versão carregada: a grade não salta. */}
+        {isSummaryPending && <SkeletonStatCards count={11} />}
         {cards.map((card) => (
           <Card key={card.label}>
             <CardHeader>
@@ -81,7 +84,10 @@ export default function DashboardPage() {
         <CardHeader>
           <CardTitle>Receita — últimos 30 dias</CardTitle>
         </CardHeader>
-        <CardContent className="h-72">
+        <CardContent className="h-72" aria-busy={isSeriesPending}>
+          {isSeriesPending ? (
+            <SkeletonChart />
+          ) : (
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={series ?? []}>
               <XAxis dataKey="date" tick={{ fontSize: 11 }} tickFormatter={(value) => value.slice(5)} />
@@ -90,6 +96,7 @@ export default function DashboardPage() {
               <Line type="monotone" dataKey="revenue" stroke="#E11D2E" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
+          )}
         </CardContent>
       </Card>
     </div>

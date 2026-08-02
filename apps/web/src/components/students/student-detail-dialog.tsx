@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { Skeleton, SkeletonList } from "@/components/ui/skeleton";
 import { useAddGoal, useAddNote, useEnrollStudent, usePlans, useStudent, useToggleGoal } from "@/hooks/use-students";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -27,7 +28,7 @@ export function StudentDetailDialog({
   studentId: string | null;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { data: student } = useStudent(studentId);
+  const { data: student, isPending } = useStudent(studentId);
   const { data: plans } = usePlans(true);
   const enrollStudent = useEnrollStudent();
   const addGoal = useAddGoal();
@@ -61,9 +62,26 @@ export function StudentDetailDialog({
   return (
     <Dialog open={Boolean(studentId)} onOpenChange={onOpenChange}>
       <DialogHeader>
-        <DialogTitle>{student?.name ?? "Carregando..."}</DialogTitle>
+        <DialogTitle>{student?.name ?? <Skeleton className="h-6 w-48" />}</DialogTitle>
         <DialogCloseButton onClick={() => onOpenChange(false)} />
       </DialogHeader>
+
+      {isPending && (
+        <div className="space-y-6" aria-busy>
+          <Skeleton className="h-6 w-64" />
+          {/* Plano, metas e observações: três seções de mesma forma. */}
+          {[0, 1, 2].map((section) => (
+            <section key={section} className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <SkeletonList items={2} />
+              <div className="flex gap-2">
+                <Skeleton className="h-10 flex-1" />
+                <Skeleton className="h-10 w-28" />
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
 
       {student && (
         <div className="space-y-6">

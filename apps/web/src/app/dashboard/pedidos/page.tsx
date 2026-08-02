@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SkeletonTableRows } from "@/components/ui/skeleton";
 import { useOrders } from "@/hooks/use-orders";
 import { OrderFormDialog } from "@/components/orders/order-form-dialog";
 import { OrderDetailDialog } from "@/components/orders/order-detail-dialog";
@@ -72,14 +73,8 @@ export default function PedidosPage() {
             <TableHead>Criado em</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
-          {isLoading && (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
-                Carregando...
-              </TableCell>
-            </TableRow>
-          )}
+        <TableBody aria-busy={isLoading}>
+          {isLoading && <SkeletonTableRows rows={6} columns={6} />}
           {!isLoading && (orders ?? []).length === 0 && (
             <TableRow>
               <TableCell colSpan={6} className="text-center text-muted-foreground">

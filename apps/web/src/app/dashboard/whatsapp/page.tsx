@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useConversation, useConversations, useUpdateWhatsAppSettings } from "@/hooks/use-whatsapp";
 import { useSession } from "@/hooks/use-session";
@@ -17,7 +18,7 @@ export default function WhatsAppPage() {
 
   const { data: conversations, isLoading } = useConversations();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const { data: conversation } = useConversation(selectedId);
+  const { data: conversation, isPending: isConversationPending } = useConversation(selectedId);
 
   const [instanceName, setInstanceName] = useState("");
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
@@ -80,8 +81,8 @@ export default function WhatsAppPage() {
           <CardHeader>
             <CardTitle>Conversas</CardTitle>
           </CardHeader>
-          <CardContent className="max-h-[32rem] space-y-1 overflow-y-auto p-2">
-            {isLoading && <p className="p-3 text-sm text-muted-foreground">Carregando...</p>}
+          <CardContent className="max-h-[32rem] space-y-1 overflow-y-auto p-2" aria-busy={isLoading}>
+            {isLoading && <SkeletonList items={5} />}
             {!isLoading && (conversations ?? []).length === 0 && (
               <p className="p-3 text-sm text-muted-foreground">
                 Nenhuma conversa ainda. Assim que um contato escrever no WhatsApp, ela aparece aqui.
@@ -110,7 +111,13 @@ export default function WhatsAppPage() {
           <CardHeader>
             <CardTitle>{conversation ? conversation.phone : "Selecione uma conversa"}</CardTitle>
           </CardHeader>
-          <CardContent className="max-h-[32rem] space-y-3 overflow-y-auto">
+          <CardContent
+            className="max-h-[32rem] space-y-3 overflow-y-auto"
+            aria-busy={Boolean(selectedId) && isConversationPending}
+          >
+            {/* Só com conversa escolhida: sem seleção o estado correto é o convite
+                para escolher uma, não um skeleton que nunca vai carregar. */}
+            {selectedId && isConversationPending && <SkeletonList items={4} withAvatar />}
             {conversation?.messages.map((message) => (
               <div
                 key={message.id}
@@ -138,7 +145,7 @@ export default function WhatsAppPage() {
                 </div>
               </div>
             ))}
-            {!conversation && (
+            {!selectedId && (
               <p className="text-sm text-muted-foreground">Escolha uma conversa na lista ao lado.</p>
             )}
           </CardContent>

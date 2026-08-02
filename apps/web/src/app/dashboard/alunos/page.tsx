@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SkeletonTableRows } from "@/components/ui/skeleton";
 import { useStudents } from "@/hooks/use-students";
 import { StudentFormDialog } from "@/components/students/student-form-dialog";
 import { PlanFormDialog } from "@/components/students/plan-form-dialog";
@@ -81,14 +82,8 @@ export default function AlunosPage() {
             <TableHead>Matrícula</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
-          {isLoading && (
-            <TableRow>
-              <TableCell colSpan={4} className="text-center text-muted-foreground">
-                Carregando...
-              </TableCell>
-            </TableRow>
-          )}
+        <TableBody aria-busy={isLoading}>
+          {isLoading && <SkeletonTableRows rows={6} columns={4} />}
           {!isLoading && (students ?? []).length === 0 && (
             <TableRow>
               <TableCell colSpan={4} className="text-center text-muted-foreground">

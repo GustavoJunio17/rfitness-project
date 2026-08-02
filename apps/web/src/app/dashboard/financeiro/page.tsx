@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Skeleton, SkeletonChart, SkeletonTableRows } from "@/components/ui/skeleton";
 import { SalesHeatmap } from "@/components/finance/sales-heatmap";
 import {
   useCashFlow,
@@ -43,11 +44,11 @@ function currency(value: number) {
 }
 
 export default function FinanceiroPage() {
-  const { data: topProducts } = useTopProducts(5, "desc");
-  const { data: leastProducts } = useTopProducts(5, "asc");
-  const { data: paymentBreakdown } = usePaymentMethodBreakdown();
-  const { data: heatmapCells } = useSalesHeatmap(30);
-  const { data: cashFlow, error: cashFlowError } = useCashFlow();
+  const { data: topProducts, isPending: isTopPending } = useTopProducts(5, "desc");
+  const { data: leastProducts, isPending: isLeastPending } = useTopProducts(5, "asc");
+  const { data: paymentBreakdown, isPending: isBreakdownPending } = usePaymentMethodBreakdown();
+  const { data: heatmapCells, isPending: isHeatmapPending } = useSalesHeatmap(30);
+  const { data: cashFlow, error: cashFlowError, isPending: isCashFlowPending } = useCashFlow();
   const createEntry = useCreateCashFlowEntry();
 
   const [description, setDescription] = useState("");
@@ -82,15 +83,19 @@ export default function FinanceiroPage() {
           <CardHeader>
             <CardTitle>Mais vendidos (90 dias)</CardTitle>
           </CardHeader>
-          <CardContent className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={topProducts ?? []} layout="vertical" margin={{ left: 24 }}>
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="productName" tick={{ fontSize: 11 }} width={120} />
-                <Tooltip />
-                <Bar dataKey="quantitySold" fill="#E11D2E" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <CardContent className="h-64" aria-busy={isTopPending}>
+            {isTopPending ? (
+              <SkeletonChart bars={5} />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topProducts ?? []} layout="vertical" margin={{ left: 24 }}>
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="productName" tick={{ fontSize: 11 }} width={120} />
+                  <Tooltip />
+                  <Bar dataKey="quantitySold" fill="#E11D2E" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -98,15 +103,19 @@ export default function FinanceiroPage() {
           <CardHeader>
             <CardTitle>Menos vendidos (90 dias)</CardTitle>
           </CardHeader>
-          <CardContent className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={leastProducts ?? []} layout="vertical" margin={{ left: 24 }}>
-                <XAxis type="number" tick={{ fontSize: 11 }} />
-                <YAxis type="category" dataKey="productName" tick={{ fontSize: 11 }} width={120} />
-                <Tooltip />
-                <Bar dataKey="quantitySold" fill="#111111" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <CardContent className="h-64" aria-busy={isLeastPending}>
+            {isLeastPending ? (
+              <SkeletonChart bars={5} />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={leastProducts ?? []} layout="vertical" margin={{ left: 24 }}>
+                  <XAxis type="number" tick={{ fontSize: 11 }} />
+                  <YAxis type="category" dataKey="productName" tick={{ fontSize: 11 }} width={120} />
+                  <Tooltip />
+                  <Bar dataKey="quantitySold" fill="#111111" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -116,7 +125,12 @@ export default function FinanceiroPage() {
           <CardHeader>
             <CardTitle>Formas de pagamento</CardTitle>
           </CardHeader>
-          <CardContent className="h-64">
+          <CardContent className="h-64" aria-busy={isBreakdownPending}>
+            {isBreakdownPending ? (
+              <div className="flex h-full items-center justify-center">
+                <Skeleton className="h-44 w-44 rounded-full" />
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -134,6 +148,7 @@ export default function FinanceiroPage() {
                 <Legend formatter={(value) => PAYMENT_METHOD_LABELS[value] ?? value} />
               </PieChart>
             </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -141,8 +156,12 @@ export default function FinanceiroPage() {
           <CardHeader>
             <CardTitle>Horários de venda (últimos 30 dias)</CardTitle>
           </CardHeader>
-          <CardContent>
-            <SalesHeatmap cells={heatmapCells ?? []} />
+          <CardContent aria-busy={isHeatmapPending}>
+            {isHeatmapPending ? (
+              <Skeleton className="h-52 w-full" />
+            ) : (
+              <SalesHeatmap cells={heatmapCells ?? []} />
+            )}
           </CardContent>
         </Card>
       </div>
@@ -163,8 +182,9 @@ export default function FinanceiroPage() {
                   <TableHead>Saldo</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {(cashFlow ?? []).length === 0 && (
+              <TableBody aria-busy={isCashFlowPending}>
+                {isCashFlowPending && <SkeletonTableRows rows={5} columns={5} />}
+                {!isCashFlowPending && (cashFlow ?? []).length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center text-muted-foreground">
                       Nenhuma movimentação registrada.

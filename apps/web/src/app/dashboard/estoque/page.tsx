@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SkeletonTableRows } from "@/components/ui/skeleton";
 import { useBrands, useCategories, useProducts } from "@/hooks/use-catalog";
 import { AlertsPanel } from "@/components/inventory/alerts-panel";
 import { ProductFormDialog } from "@/components/inventory/product-form-dialog";
@@ -95,14 +96,8 @@ export default function EstoquePage() {
             <TableHead>Ações</TableHead>
           </TableRow>
         </TableHeader>
-        <TableBody>
-          {isLoading && (
-            <TableRow>
-              <TableCell colSpan={6} className="text-center text-muted-foreground">
-                Carregando...
-              </TableCell>
-            </TableRow>
-          )}
+        <TableBody aria-busy={isLoading}>
+          {isLoading && <SkeletonTableRows rows={6} columns={6} />}
           {!isLoading && visibleRows.length === 0 && (
             <TableRow>
               <TableCell colSpan={6} className="text-center text-muted-foreground">

@@ -4,6 +4,7 @@ import { AlertTriangle, Check } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { SkeletonList } from "@/components/ui/skeleton";
 import { useResolveAlert, useStockAlerts } from "@/hooks/use-inventory";
 import type { StockAlertType } from "@/types/catalog";
 
@@ -26,8 +27,8 @@ export function AlertsPanel() {
           Alertas de estoque
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-2">
-        {isLoading && <p className="text-sm text-muted-foreground">Carregando alertas...</p>}
+      <CardContent className="space-y-2" aria-busy={isLoading}>
+        {isLoading && <SkeletonList items={2} />}
         {alerts?.length === 0 && <p className="text-sm text-muted-foreground">Nenhum alerta em aberto.</p>}
         {alerts?.map((alert) => (
           <div
