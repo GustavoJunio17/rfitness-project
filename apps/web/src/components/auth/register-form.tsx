@@ -21,8 +21,8 @@ import { cn } from "@/lib/utils";
  */
 function formatErrorReference(error: ApiError): string | null {
   if (error.status < 500) return null;
-  const details = error.details as { type?: string; code?: string | null } | undefined;
-  const parts = [details?.type, details?.code].filter(Boolean);
+  const details = error.details as { type?: string; code?: string | null; reason?: string } | undefined;
+  const parts = [details?.type, details?.code, details?.reason].filter(Boolean);
   return parts.length > 0 ? `${error.status} · ${parts.join(" · ")}` : `${error.status}`;
 }
 

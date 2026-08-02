@@ -85,6 +85,18 @@ function infraMessage(error: unknown): string | null {
   return null;
 }
 
+/**
+ * Remove segredo de mensagem de erro antes de ela sair na resposta: credencial
+ * embutida em URL (`postgres://user:senha@host`), chave de API e token JWT.
+ */
+function sanitizeMessage(message: string): string {
+  return message
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, "$1***@")
+    .replace(/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g, "***")
+    .replace(/\b(sb|sk|pk|rk)_[A-Za-z0-9_-]{8,}/g, "***")
+    .slice(0, 400);
+}
+
 function queryToObject(url: URL): Record<string, string | string[]> {
   const result: Record<string, string | string[]> = {};
   for (const key of new Set(url.searchParams.keys())) {
@@ -184,9 +196,10 @@ export function defineRoute<TBody = undefined, TQuery = undefined, TParams = und
       // Classe e código da exceção viajam junto (nunca a mensagem, que pode
       // conter dado do banco ou da requisição): sem isso, um 500 em produção só
       // é diagnosticável com acesso ao log da função.
-      const source = error as { name?: unknown; code?: unknown; errorCode?: unknown };
-      const details = {
-        type: typeof source?.name === "string" ? source.name : "Error",
+      const source = error as { name?: unknown; code?: unknown; errorCode?: unknown; message?: unknown };
+      const type = typeof source?.name === "string" ? source.name : "Error";
+      const details: { type: string; code: string | null; reason?: string } = {
+        type,
         code:
           typeof source?.code === "string"
             ? source.code
@@ -194,6 +207,14 @@ export function defineRoute<TBody = undefined, TQuery = undefined, TParams = und
               ? source.errorCode
               : null,
       };
+
+      // Falha de inicialização do Prisma não tem código: engine ausente no
+      // bundle, env sem valor e URL malformada chegam todas iguais, e a causa
+      // vive só no texto. Vai sanitizado — credencial de URL é apagada antes.
+      if (type === "PrismaClientInitializationError" && typeof source.message === "string") {
+        details.reason = sanitizeMessage(source.message);
+      }
+
       return errorResponse(500, "INTERNAL", "Erro interno inesperado.", details);
     }
   };

@@ -231,6 +231,28 @@ describe("defineRoute — erros", () => {
     });
   });
 
+  it("falha de inicialização do Prisma expõe a causa sem a credencial da URL", async () => {
+    const handler = defineRoute(
+      {
+        handler: async () => {
+          const error = new Error(
+            'Query engine library not found. datasource: postgresql://postgres.abc:s3nh4Secreta@aws-0.pooler.supabase.com:6543/postgres',
+          );
+          error.name = "PrismaClientInitializationError";
+          throw error;
+        },
+      },
+      deps(adminAuth),
+    );
+
+    const response = await handler(request());
+    expect(response.status).toBe(500);
+    const payload = await response.json();
+    expect(payload.error.details.type).toBe("PrismaClientInitializationError");
+    expect(payload.error.details.reason).toContain("Query engine library not found");
+    expect(JSON.stringify(payload)).not.toContain("s3nh4Secreta");
+  });
+
   it("204 quando o handler não devolve conteúdo", async () => {
     const handler = defineRoute({ handler: async () => undefined }, deps(adminAuth));
     const response = await handler(request());
