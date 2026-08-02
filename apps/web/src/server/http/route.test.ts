@@ -158,6 +158,44 @@ describe("defineRoute — erros", () => {
     expect(JSON.stringify(payload)).not.toContain("ECONNREFUSED");
   });
 
+  it("erro de infra do Prisma vira 503 acionável, sem expor a connection string", async () => {
+    const handler = defineRoute(
+      {
+        handler: async () => {
+          const error = Object.assign(new Error("Can't reach database server at db.abc.supabase.co:5432"), {
+            code: "P1001",
+          });
+          throw error;
+        },
+      },
+      deps(adminAuth),
+    );
+
+    const response = await handler(request());
+    expect(response.status).toBe(503);
+    const payload = await response.json();
+    expect(payload.error.code).toBe("CONFIG");
+    expect(payload.error.message).toMatch(/DATABASE_URL/);
+    expect(JSON.stringify(payload)).not.toContain("supabase.co");
+  });
+
+  it("banco sem migration vira 503 dizendo o que rodar", async () => {
+    const handler = defineRoute(
+      {
+        handler: async () => {
+          throw Object.assign(new Error('relation "gyms" does not exist'), { code: "P2021" });
+        },
+      },
+      deps(adminAuth),
+    );
+
+    const response = await handler(request());
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "CONFIG", message: expect.stringContaining("db:migrate:deploy") },
+    });
+  });
+
   it("204 quando o handler não devolve conteúdo", async () => {
     const handler = defineRoute({ handler: async () => undefined }, deps(adminAuth));
     const response = await handler(request());

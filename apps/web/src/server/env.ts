@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { configError } from "@rfitness/core";
 
 /**
  * Env validado uma vez por processo. Acessar `env.X` em vez de
@@ -41,8 +42,17 @@ export function getEnv(): Env {
 
   const parsed = schema.safeParse(process.env);
   if (!parsed.success) {
-    const missing = parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
-    throw new Error(`Configuração inválida:\n  ${missing.join("\n  ")}`);
+    // Só os nomes das variáveis viajam na resposta — valor de env nunca sai
+    // daqui. O detalhe completo fica no log do servidor.
+    const names = [...new Set(parsed.error.issues.map((issue) => issue.path.join(".")))];
+    // eslint-disable-next-line no-console
+    console.error(
+      "[env] configuração inválida:\n  " +
+        parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("\n  "),
+    );
+    throw configError(
+      `Servidor sem configuração: defina ${names.join(", ")} nas variáveis de ambiente do deploy.`,
+    );
   }
 
   cached = parsed.data;

@@ -36,6 +36,30 @@ function errorResponse(status: number, code: string, message: string, details?: 
   return NextResponse.json({ error: { code, message, ...(details ? { details } : {}) } }, { status });
 }
 
+/**
+ * Falha de infra do Prisma tem código estável (`P1001`, `P2021`…). Sem esta
+ * tradução, banco inacessível e banco sem migration caem no mesmo 500 genérico,
+ * que não diz o que fazer. A mensagem cita o problema, nunca a connection string.
+ */
+function infraMessage(error: unknown): string | null {
+  const code = (error as { code?: unknown })?.code;
+  if (typeof code !== "string") return null;
+
+  switch (code) {
+    case "P1000":
+    case "P1010":
+      return "Banco de dados recusou a autenticação. Confira DATABASE_URL.";
+    case "P1001":
+    case "P1002":
+      return "Não foi possível conectar ao banco de dados. Confira DATABASE_URL e se o projeto do Supabase está ativo.";
+    case "P2021":
+    case "P2022":
+      return "O banco de dados ainda não foi migrado. Rode `pnpm db:migrate:deploy`.";
+    default:
+      return null;
+  }
+}
+
 function queryToObject(url: URL): Record<string, string | string[]> {
   const result: Record<string, string | string[]> = {};
   for (const key of new Set(url.searchParams.keys())) {
@@ -128,6 +152,10 @@ export function defineRoute<TBody = undefined, TQuery = undefined, TParams = und
 
       // eslint-disable-next-line no-console
       console.error("[route] erro não tratado", error);
+
+      const infra = infraMessage(error);
+      if (infra) return errorResponse(503, "CONFIG", infra);
+
       return errorResponse(500, "INTERNAL", "Erro interno inesperado.");
     }
   };
