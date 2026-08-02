@@ -34,14 +34,25 @@ export function AuthShell({ title, subtitle, children, footer, wide = false }: A
   );
 }
 
-/** Bloco de erro do formulário: mesmo tratamento nas duas telas. */
-export function AuthError({ message }: { message: string }) {
+/**
+ * Bloco de erro do formulário: mesmo tratamento nas duas telas.
+ *
+ * `reference` aparece só em falha inesperada (500) e carrega a classe/código da
+ * exceção. Não diz nada ao usuário final, mas é o que ele consegue copiar para
+ * o suporte sem abrir o DevTools nem o log do servidor.
+ */
+export function AuthError({ message, reference }: { message: string; reference?: string | null }) {
   return (
-    <p
+    <div
       role="alert"
       className="rounded-md border border-brand/30 bg-brand/5 px-3 py-2 text-sm text-brand-600"
     >
-      {message}
-    </p>
+      <p>{message}</p>
+      {reference && (
+        <p className="mt-1 font-mono text-xs text-brand-600/70">
+          Detalhe técnico: <span className="select-all">{reference}</span>
+        </p>
+      )}
+    </div>
   );
 }
