@@ -27,9 +27,9 @@ datasource db {
 //     pertence a nenhuma academia e não enxerga dado operacional de tenant.
 //   * Academia — `User` + `Role`, escopado por `gymId`. É o gestor e a equipe.
 //
-// Não existe auto-cadastro: quem quer entrar abre uma `AccessRequest`, e um
-// admin de plataforma aprova. A aprovação cria as credenciais e a primeira
-// academia; daí em diante o próprio gestor cria as academias seguintes.
+// O cadastro é aberto e cria a conta, mas nasce travado: um `PlatformAdmin`
+// precisa liberar. Só depois disso o gestor consegue cadastrar as academias
+// dele — quantas quiser.
 // =========================================================================
 
 /// Admin da RFitness. Fonte de verdade do privilégio de plataforma — checar uma
@@ -59,21 +59,26 @@ enum AccessRequestStatus {
 /// Cadastro de gestor aguardando liberação da RFitness.
 ///
 /// A conta no Supabase Auth já existe (a pessoa escolheu a própria senha no
-/// cadastro) — o que não existe até a aprovação é a academia. Enquanto o status
-/// for PENDING a pessoa loga, mas não tem tenant nenhum, então não há o que
-/// operar: o acesso é controlado sem passar por senha provisória.
+/// cadastro). O que a RFitness controla é a liberação: enquanto o status for
+/// PENDING a pessoa loga mas não pode criar academia nenhuma, e sem tenant não
+/// há o que operar. Aprovar é só destravar — as unidades quem cadastra é o
+/// próprio gestor, depois.
 model AccessRequest {
   id String @id @default(uuid())
 
-  /// Conta criada no cadastro (`auth.users`). Único: uma conta, um pedido.
+  /// Conta criada no cadastro (`auth.users`). Único: uma conta, um cadastro.
   authUserId String? @unique
 
   requesterName  String
   requesterEmail String
   phone          String?
-  gymName        String
-  notes          String?
-  status         AccessRequestStatus @default(PENDING)
+
+  /// Opcional e legado: o cadastro atual não pergunta a academia. Fica para os
+  /// registros antigos, em que a aprovação provisionava a unidade.
+  gymName String?
+
+  notes  String?
+  status AccessRequestStatus @default(PENDING)
 
   reviewedAt     DateTime?
   reviewedById   String?

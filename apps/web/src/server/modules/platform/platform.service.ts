@@ -2,17 +2,12 @@ import { conflictError, evaluatePassword, notFoundError, validationError } from 
 import type { AccessRequestStatus } from "@prisma/client";
 import { prisma } from "../../db";
 import { getSupabaseAdmin } from "../../supabase/admin";
-import { writeAuditLog } from "../../audit/audit-log";
 import type { AuthContext } from "../../auth/context";
-import { provisionGym, syncGymIdsMetadata } from "../identity/gym-provisioning";
 
 export interface SignUpInput {
   requesterName: string;
   requesterEmail: string;
   password: string;
-  phone?: string | null;
-  gymName: string;
-  notes?: string | null;
 }
 
 export interface AccessRequestDto {
@@ -20,7 +15,7 @@ export interface AccessRequestDto {
   requesterName: string;
   requesterEmail: string;
   phone: string | null;
-  gymName: string;
+  gymName: string | null;
   notes: string | null;
   status: AccessRequestStatus;
   decisionReason: string | null;
@@ -31,15 +26,13 @@ export interface AccessRequestDto {
 }
 
 export interface ApprovalResult {
-  gymId: string;
-  gymName: string;
   email: string;
+  requesterName: string;
 }
 
 /** Situação da conta de quem ainda não opera nenhuma academia. */
 export interface AccessStatusDto {
   status: AccessRequestStatus;
-  gymName: string;
   decisionReason: string | null;
   createdAt: Date;
 }
@@ -49,7 +42,7 @@ function toDto(request: {
   requesterName: string;
   requesterEmail: string;
   phone: string | null;
-  gymName: string;
+  gymName: string | null;
   notes: string | null;
   status: AccessRequestStatus;
   decisionReason: string | null;
@@ -90,25 +83,24 @@ const REQUEST_SELECT = {
 } as const;
 
 /**
- * Cadastro público de gestor.
+ * Cadastro público de gestor: nome, e-mail e senha.
  *
- * Cria a conta de verdade, com a senha que a pessoa escolheu — ela já consegue
- * entrar. O que fica pendente da RFitness é a academia: sem tenant, o painel não
- * tem o que mostrar nem o que gravar, então a aprovação continua sendo a
- * barreira real, sem depender de senha provisória repassada por fora.
+ * Cria a conta de verdade — a pessoa já consegue entrar —, mas travada: sem
+ * liberação da RFitness ela não cria academia, e sem academia não há nada para
+ * operar. A academia não é perguntada aqui de propósito; quem decide quantas
+ * unidades existem, e como se chamam, é o gestor depois de liberado.
  *
- * Aqui, ao contrário de um formulário anônimo, dizer "e-mail já cadastrado" é
+ * Ao contrário de um formulário anônimo, dizer "e-mail já cadastrado" é
  * necessário: a pessoa precisa saber que deve fazer login em vez de tentar de
  * novo.
  */
 export async function signUp(input: SignUpInput): Promise<{ status: AccessRequestStatus }> {
   const email = input.requesterEmail.trim().toLowerCase();
   const name = input.requesterName.trim();
-  const gymName = input.gymName.trim();
 
   // Mesma regra de força do resto do sistema: o medidor da tela é conveniência,
   // não barreira — quem chama a API direto passa por aqui igual.
-  const strength = evaluatePassword(input.password, [name, email, gymName]);
+  const strength = evaluatePassword(input.password, [name, email]);
   if (!strength.acceptable) {
     throw validationError(strength.hint ?? "Escolha uma senha mais forte.");
   }
@@ -142,14 +134,7 @@ export async function signUp(input: SignUpInput): Promise<{ status: AccessReques
 
   try {
     await prisma.accessRequest.create({
-      data: {
-        authUserId: data.user.id,
-        requesterName: name,
-        requesterEmail: email,
-        phone: input.phone?.trim() || null,
-        gymName,
-        notes: input.notes?.trim() || null,
-      },
+      data: { authUserId: data.user.id, requesterName: name, requesterEmail: email },
     });
   } catch (dbError) {
     // Sem o pedido, a conta viraria uma credencial válida que ninguém consegue
@@ -168,11 +153,10 @@ export async function signUp(input: SignUpInput): Promise<{ status: AccessReques
  * dizer "aguardando aprovação" em vez de mostrar um painel vazio.
  */
 export async function getAccessStatus(authUserId: string): Promise<AccessStatusDto | null> {
-  const request = await prisma.accessRequest.findUnique({
+  return prisma.accessRequest.findUnique({
     where: { authUserId },
-    select: { status: true, gymName: true, decisionReason: true, createdAt: true },
+    select: { status: true, decisionReason: true, createdAt: true },
   });
-  return request;
 }
 
 /**
@@ -209,58 +193,31 @@ async function requireReviewer(auth: AuthContext): Promise<{ id: string; name: s
 }
 
 /**
- * Aprova o cadastro: provisiona a academia pedida e a entrega ao gestor.
+ * Libera o cadastro.
  *
- * A conta já existe desde o cadastro, então não há senha para criar nem para
- * repassar — no próximo carregamento a academia simplesmente aparece para ele.
+ * Aprovar é só destravar a conta — nenhuma academia é criada aqui. A pessoa já
+ * tem login desde o cadastro; o que faltava era poder cadastrar as próprias
+ * unidades, e é isso que passa a valer no próximo carregamento dela.
  */
 export async function approveAccessRequest(
   auth: AuthContext,
   requestId: string,
-  meta: { ip: string | null; userAgent: string | null },
 ): Promise<ApprovalResult> {
   const reviewer = await requireReviewer(auth);
 
   const request = await prisma.accessRequest.findUnique({ where: { id: requestId } });
   if (!request) throw notFoundError("Cadastro não encontrado.");
   if (request.status !== "PENDING") throw conflictError("Este cadastro já foi decidido.");
-  if (!request.authUserId) {
-    throw validationError(
-      "Este cadastro é anterior ao fluxo atual e não tem conta associada. Peça para a pessoa se cadastrar de novo.",
-    );
-  }
-
-  const gym = await provisionGym({
-    gymName: request.gymName,
-    ownerAuthUserId: request.authUserId,
-    ownerName: request.requesterName,
-    ownerEmail: request.requesterEmail,
-  });
-
-  await syncGymIdsMetadata(request.authUserId);
 
   await prisma.accessRequest.update({
     where: { id: requestId },
-    data: {
-      status: "APPROVED",
-      reviewedAt: new Date(),
-      reviewedById: reviewer.id,
-      createdGymId: gym.id,
-    },
+    data: { status: "APPROVED", reviewedAt: new Date(), reviewedById: reviewer.id },
   });
 
-  await writeAuditLog({
-    gymId: gym.id,
-    userId: gym.userId,
-    action: "platform.access_request.approve",
-    entityType: "AccessRequest",
-    entityId: requestId,
-    after: { gymId: gym.id, reviewer: reviewer.name },
-    ip: meta.ip,
-    userAgent: meta.userAgent,
-  });
-
-  return { gymId: gym.id, gymName: gym.name, email: request.requesterEmail };
+  // A decisão não vai para `audit_logs`: aquela trilha é escopada por academia,
+  // e aqui ainda não existe nenhuma. O registro fica no próprio cadastro —
+  // `reviewedById` e `reviewedAt` dizem quem liberou e quando.
+  return { email: request.requesterEmail, requesterName: request.requesterName };
 }
 
 export async function rejectAccessRequest(

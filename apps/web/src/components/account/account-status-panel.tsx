@@ -81,14 +81,13 @@ export function AccountStatusPanel() {
 
   if (session.access?.status === "PENDING") {
     return (
-      <StatePanel icon={Clock} tone="wait" title="Cadastro em análise">
+      <StatePanel icon={Clock} tone="wait" title="Acesso em análise">
         <p>
-          Sua conta já existe, mas a academia{" "}
-          <span className="font-medium text-foreground">{session.access.gymName}</span> ainda precisa
-          ser liberada pela administração da RFitness.
+          Sua conta foi criada, mas ainda precisa ser liberada pela administração da RFitness. Até
+          lá não é possível cadastrar academias nem operar o painel.
         </p>
         <p>
-          Assim que for aprovado, basta recarregar esta página — nada precisa ser refeito nem
+          Assim que for liberado, basta recarregar esta página — nada precisa ser refeito nem
           cadastrado de novo.
         </p>
       </StatePanel>
@@ -97,7 +96,7 @@ export function AccountStatusPanel() {
 
   if (session.access?.status === "REJECTED") {
     return (
-      <StatePanel icon={XCircle} tone="error" title="Cadastro não aprovado">
+      <StatePanel icon={XCircle} tone="error" title="Acesso não liberado">
         <p>A administração da RFitness não liberou o acesso para esta conta.</p>
         {session.access.decisionReason && (
           <p className="rounded-md border border-border bg-background p-3 text-left text-foreground">
@@ -108,14 +107,26 @@ export function AccountStatusPanel() {
     );
   }
 
+  // Liberado e ainda sem unidade: é o estado logo após a aprovação, então a
+  // tela convida a criar em vez de só informar que não há nada.
+  const firstTime = session.memberships.length === 0;
+
   return (
     <StatePanel
       icon={Building2}
       tone="neutral"
-      title="Nenhuma academia selecionada"
-      action={<ActionLink href="/dashboard/academias">Ver minhas academias</ActionLink>}
+      title={firstTime ? "Acesso liberado" : "Nenhuma academia selecionada"}
+      action={
+        <ActionLink href="/dashboard/academias?nova=1">
+          {firstTime ? "Cadastrar academia" : "Ver minhas academias"}
+        </ActionLink>
+      }
     >
-      <p>Escolha uma unidade para gerenciar ou cadastre uma nova.</p>
+      <p>
+        {firstTime
+          ? "Sua conta está liberada. Cadastre sua primeira academia para começar — depois você pode adicionar quantas unidades quiser."
+          : "Escolha uma unidade para gerenciar ou cadastre uma nova."}
+      </p>
     </StatePanel>
   );
 }

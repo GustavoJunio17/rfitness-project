@@ -10,7 +10,8 @@ export interface AccessRequest {
   requesterName: string;
   requesterEmail: string;
   phone: string | null;
-  gymName: string;
+  /** Legado: os cadastros atuais não informam academia. */
+  gymName: string | null;
   notes: string | null;
   status: AccessRequestStatus;
   decisionReason: string | null;
@@ -21,9 +22,8 @@ export interface AccessRequest {
 }
 
 export interface ApprovalResult {
-  gymId: string;
-  gymName: string;
   email: string;
+  requesterName: string;
 }
 
 export interface PlatformGym {

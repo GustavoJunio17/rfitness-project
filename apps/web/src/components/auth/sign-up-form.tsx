@@ -27,31 +27,25 @@ function formatErrorReference(error: ApiError): string | null {
 }
 
 /**
- * Cadastro de gestor.
+ * Cadastro de gestor: nome, e-mail e senha.
  *
- * Cria a conta com a senha da própria pessoa e já a autentica — mas a academia
- * fica pendente de liberação da RFitness, e é isso que ela vê ao entrar. Assim
- * o controle de quem opera a plataforma continua com a administração, sem o
- * vaivém de senha provisória repassada por fora.
+ * A academia não é pedida aqui de propósito — o gestor cadastra as unidades
+ * dele depois, quantas quiser. O que a RFitness controla é a liberação da
+ * conta: sem ela, não há como criar academia nenhuma, e portanto nada a operar.
  */
 export function SignUpForm() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [gymName, setGymName] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [errorReference, setErrorReference] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Reavaliada a cada tecla; nome/e-mail/academia entram como contexto para
-  // reprovar senha derivada dos próprios dados do cadastro.
-  const strength = useMemo(
-    () => evaluatePassword(password, [name, email, gymName]),
-    [password, name, email, gymName],
-  );
+  // Reavaliada a cada tecla; nome e e-mail entram como contexto para reprovar
+  // senha derivada dos próprios dados do cadastro.
+  const strength = useMemo(() => evaluatePassword(password, [name, email]), [password, name, email]);
 
   const confirmTouched = passwordConfirm.length > 0;
   const passwordsMatch = password === passwordConfirm;
@@ -76,13 +70,7 @@ export function SignUpForm() {
       await apiFetch("/auth/signup", {
         method: "POST",
         allowAnonymous: true,
-        body: JSON.stringify({
-          requesterName: name,
-          requesterEmail: email,
-          password,
-          phone: phone || null,
-          gymName,
-        }),
+        body: JSON.stringify({ requesterName: name, requesterEmail: email, password }),
       });
 
       // Login logo em seguida: a conta existe de verdade, então a pessoa entra e
@@ -110,7 +98,7 @@ export function SignUpForm() {
     <AuthShell
       wide
       title="Criar conta de gestor"
-      subtitle="Sua conta é criada na hora. A academia é liberada pela administração da RFitness."
+      subtitle="Sua conta é criada na hora, mas só funciona depois que a administração da RFitness liberar o acesso."
       footer={
         <>
           Já tem conta?{" "}
@@ -146,31 +134,6 @@ export function SignUpForm() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="gymName">Nome da academia</Label>
-            <Input
-              id="gymName"
-              autoComplete="organization"
-              placeholder="Ex.: Corpo em Forma"
-              value={gymName}
-              onChange={(e) => setGymName(e.target.value)}
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="phone">Telefone (opcional)</Label>
-            <Input
-              id="phone"
-              inputMode="tel"
-              autoComplete="tel"
-              placeholder="(00) 00000-0000"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </div>
         </div>
 
         <div className="space-y-1.5">

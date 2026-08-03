@@ -37,9 +37,9 @@ function formatDate(value: string): string {
 }
 
 /**
- * Confirmação da liberação. Não há credencial a repassar: a conta já existia
- * desde o cadastro, com a senha da própria pessoa — o que a aprovação entregou
- * foi a academia.
+ * Confirmação da liberação. Não há credencial a repassar nem academia a
+ * escolher: a conta já existia desde o cadastro, com a senha da própria pessoa,
+ * e as unidades quem cadastra é ela.
  */
 function ApprovalReceipt({ result, onDismiss }: { result: ApprovalResult; onDismiss: () => void }) {
   return (
@@ -48,10 +48,10 @@ function ApprovalReceipt({ result, onDismiss }: { result: ApprovalResult; onDism
         <div className="flex items-start gap-3">
           <Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden />
           <div>
-            <p className="font-semibold">Acesso liberado — academia “{result.gymName}” criada.</p>
+            <p className="font-semibold">Acesso liberado para {result.requesterName}.</p>
             <p className="text-sm text-muted-foreground">
-              {result.email} já pode operar o painel. Nada precisa ser enviado por fora: a senha é a
-              que a pessoa escolheu no cadastro.
+              {result.email} já pode cadastrar as academias dele. Nada precisa ser enviado por fora:
+              a senha é a que a pessoa escolheu no cadastro.
             </p>
           </div>
         </div>
@@ -104,10 +104,6 @@ function RequestRow({
         <p className="font-medium">{request.requesterName}</p>
         <p className="text-xs text-muted-foreground">{request.requesterEmail}</p>
         {request.phone && <p className="text-xs text-muted-foreground">{request.phone}</p>}
-      </TableCell>
-      <TableCell>
-        <p>{request.gymName}</p>
-        {request.notes && <p className="text-xs text-muted-foreground">{request.notes}</p>}
       </TableCell>
       <TableCell>{formatDate(request.createdAt)}</TableCell>
       <TableCell>
@@ -239,7 +235,6 @@ export default function PlataformaPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Solicitante</TableHead>
-              <TableHead>Academia</TableHead>
               <TableHead>Recebido</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Ações</TableHead>
@@ -247,14 +242,14 @@ export default function PlataformaPage() {
           </TableHeader>
           <TableBody>
             {loadingRequests ? (
-              <SkeletonTableRows rows={4} columns={5} />
+              <SkeletonTableRows rows={4} columns={4} />
             ) : requests && requests.length > 0 ? (
               requests.map((request) => (
                 <RequestRow key={request.id} request={request} onApproved={setReceipt} />
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
+                <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
                   Nenhum cadastro neste filtro.
                 </TableCell>
               </TableRow>
