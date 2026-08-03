@@ -41,14 +41,56 @@ export const signUpSchema = z.object({
   password: z.string().min(PASSWORD_MIN_LENGTH, "A senha deve ter no mínimo 8 caracteres.").max(72),
 });
 
-export const accessRequestStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
-export const accessRequestQuery = z.object({ status: accessRequestStatusSchema.optional() });
+export const managerAccountStatusSchema = z.enum(["PENDING", "ACTIVE", "REJECTED", "SUSPENDED"]);
 
-export const rejectAccessRequestSchema = z.object({
-  reason: z.string().trim().min(3, "Explique o motivo — ele vai para o histórico.").max(500),
+export const managerAccountQuery = z.object({
+  status: managerAccountStatusSchema.optional(),
+  search: z.string().trim().min(1).max(120).optional(),
+});
+
+export const createManagerAccountSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  email: z.string().trim().email(),
+  password: z.string().min(PASSWORD_MIN_LENGTH, "A senha deve ter no mínimo 8 caracteres.").max(72),
+  phone: z.string().trim().max(20).optional().nullable(),
+  notes: z.string().trim().max(1000).optional().nullable(),
+});
+
+export const updateManagerAccountSchema = z
+  .object({
+    name: z.string().trim().min(2).max(120).optional(),
+    phone: z.string().trim().max(20).optional().nullable(),
+    notes: z.string().trim().max(1000).optional().nullable(),
+    status: managerAccountStatusSchema.optional(),
+    decisionReason: z.string().trim().max(500).optional().nullable(),
+  })
+  .refine((value) => Object.keys(value).length > 0, "Nada para alterar.");
+
+export const setPasswordSchema = z.object({
+  password: z.string().min(PASSWORD_MIN_LENGTH, "A senha deve ter no mínimo 8 caracteres.").max(72),
 });
 
 export const createGymSchema = z.object({ name: z.string().trim().min(2).max(120) });
+
+export const createPlatformGymSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  ownerAccountId: z.string().uuid(),
+});
+
+export const updatePlatformGymSchema = z
+  .object({
+    name: z.string().trim().min(2).max(120).optional(),
+    isActive: z.boolean().optional(),
+    ownerAccountId: z.string().uuid().optional(),
+  })
+  .refine((value) => Object.keys(value).length > 0, "Nada para alterar.");
+
+export const gymAccessSchema = z.object({ accountId: z.string().uuid() });
+
+export const accountIdParam = z.object({
+  id: z.string().uuid("Identificador inválido."),
+  accountId: z.string().uuid("Identificador inválido."),
+});
 
 export const updateGymSchema = z
   .object({

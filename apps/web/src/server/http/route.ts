@@ -154,7 +154,7 @@ export function defineRoute<TBody = undefined, TQuery = undefined, TParams = und
         // Conta não liberada não opera nada. `any` continua passando porque é
         // por onde o cliente descobre o próprio estado (`/auth/me`) e por onde
         // ele troca a senha — negar aí deixaria a pessoa sem explicação.
-        if (scope !== "any" && auth.accessStatus !== "APPROVED") {
+        if (scope !== "any" && auth.accessStatus !== "ACTIVE") {
           return errorResponse(
             403,
             "ACCOUNT_NOT_APPROVED",

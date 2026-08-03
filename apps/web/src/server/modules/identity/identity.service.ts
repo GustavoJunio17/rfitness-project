@@ -12,7 +12,7 @@ import { getEnv } from "../../env";
 import { getSupabaseAdmin } from "../../supabase/admin";
 import { writeAuditLog } from "../../audit/audit-log";
 import type { AuthContext, GymMembership } from "../../auth/context";
-import { getAccessStatus, type AccessStatusDto } from "../platform/platform.service";
+import { getAccountStatus, type AccountStatusDto } from "../platform/platform.service";
 import { provisionGym, syncGymIdsMetadata } from "./gym-provisioning";
 
 export interface GymSummary {
@@ -40,7 +40,7 @@ export interface CurrentUserDto {
    * diferença entre "aguardando a RFitness" e "painel realmente vazio", e sem
    * ela a interface não teria como explicar por que não há nada para operar.
    */
-  access: AccessStatusDto | null;
+  access: AccountStatusDto | null;
 }
 
 /** Perfil da sessão atual, com a rede de academias e a unidade ativa. */
@@ -53,7 +53,7 @@ export async function getCurrentUser(auth: AuthContext): Promise<CurrentUserDto>
   };
 
   if (!auth.gymId) {
-    const access = auth.isPlatformAdmin ? null : await getAccessStatus(auth.authUserId);
+    const access = auth.isPlatformAdmin ? null : await getAccountStatus(auth.authUserId);
     return { ...base, id: null, roles: [], gym: null, access };
   }
 
@@ -145,7 +145,7 @@ export async function createGym(
   // Segunda checagem, além da de `defineRoute`: a rota é de escopo `any` (quem
   // ainda não tem academia precisa alcançá-la), então é aqui que a liberação
   // vira barreira para a criação em si.
-  if (auth.accessStatus !== "APPROVED") {
+  if (auth.accessStatus !== "ACTIVE") {
     throw forbiddenError("Sua conta ainda não foi liberada pela administração da RFitness.");
   }
 

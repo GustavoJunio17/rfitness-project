@@ -191,6 +191,19 @@ async function main() {
   });
   await prisma.gym.update({ where: { id: gym.id }, data: { ownerAuthUserId: authUserId } });
 
+  // Conta de gestor: é o que faz a demo aparecer no console da plataforma e o
+  // que libera o login (sem ela, só contas com perfil preexistente entram).
+  await prisma.managerAccount.upsert({
+    where: { authUserId },
+    update: { name: "Administrador RFitness", email: ADMIN_EMAIL, status: "ACTIVE" },
+    create: {
+      authUserId,
+      name: "Administrador RFitness",
+      email: ADMIN_EMAIL,
+      status: "ACTIVE",
+    },
+  });
+
   const admin = await prisma.user.upsert({
     where: { authUserId_gymId: { authUserId, gymId: gym.id } },
     update: { name: "Administrador RFitness", email: ADMIN_EMAIL, status: "ACTIVE" },

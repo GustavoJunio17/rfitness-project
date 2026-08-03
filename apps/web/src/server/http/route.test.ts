@@ -9,7 +9,7 @@ const adminAuth: AuthContext = {
   gymId: "gym-1",
   email: "admin@demo.com",
   name: "Admin",
-  accessStatus: "APPROVED",
+  accessStatus: "ACTIVE",
   isPlatformAdmin: false,
   memberships: [{ gymId: "gym-1", gymName: "Academia 1", gymSlug: "academia-1", roles: ["ADMIN"] }],
   roles: ["ADMIN"],

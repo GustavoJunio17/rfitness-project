@@ -8,7 +8,24 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
     () =>
       new QueryClient({
         defaultOptions: {
-          queries: { retry: 1, staleTime: 30_000 },
+          queries: {
+            retry: 1,
+
+            // Voltar para uma tela já visitada não deve recarregar tudo: o dado
+            // continua na tela enquanto a revalidação acontece por baixo, e o
+            // tempo real invalida o que muda de fato.
+            staleTime: 60_000,
+            gcTime: 10 * 60_000,
+
+            // Alternar de janela não é sinal de que o dado mudou — e cada volta
+            // ao navegador disparava um refetch de tudo que estava montado.
+            refetchOnWindowFocus: false,
+            refetchOnReconnect: false,
+
+            // Mantém o resultado anterior visível enquanto a chave muda (filtro,
+            // busca, troca de página), em vez de piscar esqueleto a cada tecla.
+            placeholderData: <T,>(previous: T) => previous,
+          },
         },
       }),
   );

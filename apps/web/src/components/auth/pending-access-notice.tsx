@@ -18,7 +18,7 @@ export function PendingAccessNotice({
   reason,
   email,
 }: {
-  status: "PENDING" | "REJECTED";
+  status: "PENDING" | "REJECTED" | "SUSPENDED";
   reason: string | null;
   email: string;
 }) {
@@ -32,13 +32,15 @@ export function PendingAccessNotice({
     router.refresh();
   }
 
-  const rejected = status === "REJECTED";
+  // Recusado e suspenso dizem a mesma coisa para quem está do lado de fora:
+  // não dá para usar o painel. A diferença entre os dois é administrativa.
+  const blocked = status !== "PENDING";
 
   return (
     <AuthShell
-      title={rejected ? "Acesso não liberado" : "Conta aguardando liberação"}
+      title={blocked ? "Acesso não liberado" : "Conta aguardando liberação"}
       subtitle={
-        rejected
+        blocked
           ? "A administração da RFitness não liberou o acesso desta conta."
           : "Sua conta foi criada, mas ainda precisa ser liberada pela administração da RFitness."
       }
@@ -46,13 +48,13 @@ export function PendingAccessNotice({
     >
       <div className="space-y-5">
         <div className="flex flex-col items-center gap-3 text-center">
-          {rejected ? (
+          {blocked ? (
             <XCircle className="h-10 w-10 text-brand-red" aria-hidden />
           ) : (
             <Clock className="h-10 w-10 text-amber-500" aria-hidden />
           )}
           <p className="text-sm text-muted-foreground">
-            {rejected
+            {blocked
               ? "Não é possível usar o painel com esta conta."
               : "Enquanto isso não é possível entrar no painel nem cadastrar academias."}
           </p>
@@ -69,7 +71,7 @@ export function PendingAccessNotice({
         )}
 
         <div className="flex flex-col gap-2">
-          {!rejected && (
+          {!blocked && (
             // A liberação acontece do outro lado, sem aviso para esta aba; um
             // botão explícito evita a dúvida de "será que já liberaram?".
             <Button variant="outline" className="w-full" onClick={() => router.refresh()}>

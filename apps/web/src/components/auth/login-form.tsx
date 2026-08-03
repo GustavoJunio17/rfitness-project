@@ -48,7 +48,7 @@ export function LoginForm() {
     // dentro do painel. A sessão é encerrada para não deixar meia-entrada.
     try {
       const session = await apiFetch<{ access: { status: string } | null }>("/auth/me");
-      if (session.access && session.access.status !== "APPROVED") {
+      if (session.access && session.access.status !== "ACTIVE") {
         await supabase.auth.signOut();
         setError(
           session.access.status === "REJECTED"

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getAuthContext } from "@/server/auth/context";
-import { getAccessStatus } from "@/server/modules/platform/platform.service";
+import { getAccountStatus } from "@/server/modules/platform/platform.service";
 import { PendingAccessNotice } from "@/components/auth/pending-access-notice";
 
 export const metadata: Metadata = {
@@ -21,14 +21,14 @@ export const dynamic = "force-dynamic";
 export default async function AcessoPendentePage() {
   const auth = await getAuthContext();
   if (!auth) redirect("/login");
-  if (auth.accessStatus === "APPROVED") redirect("/dashboard");
+  if (auth.accessStatus === "ACTIVE") redirect("/dashboard");
 
-  const access = await getAccessStatus(auth.authUserId);
+  const account = await getAccountStatus(auth.authUserId);
 
   return (
     <PendingAccessNotice
       status={auth.accessStatus}
-      reason={access?.decisionReason ?? null}
+      reason={account?.decisionReason ?? null}
       email={auth.email}
     />
   );

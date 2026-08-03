@@ -55,6 +55,15 @@ export async function middleware(request: NextRequest) {
   return response;
 }
 
+/**
+ * O middleware faz uma chamada de rede ao Supabase (`getUser`) a cada request
+ * que casa. Rodá-lo em `/api/*` era puro custo: as rotas já validam a sessão
+ * por conta própria, e o resultado era duas idas ao Auth por chamada da
+ * interface. Fica só onde ele serve para algo — navegação de página, onde a
+ * renovação do cookie e o gate de rota acontecem.
+ */
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml)$).*)",
+  ],
 };

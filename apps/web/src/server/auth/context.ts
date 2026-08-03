@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import type { Role } from "@rfitness/core";
 import { prisma } from "../db";
@@ -12,7 +13,8 @@ import {
 
 export { ACTIVE_GYM_COOKIE, type GymMembership };
 
-export type AccessStatus = "APPROVED" | "PENDING" | "REJECTED";
+/** Espelha `ManagerAccountStatus`; só `ACTIVE` abre o painel. */
+export type AccessStatus = "ACTIVE" | "PENDING" | "REJECTED" | "SUSPENDED";
 
 export interface AuthContext {
   /** id em `auth.users` (Supabase Auth). */
@@ -21,7 +23,7 @@ export interface AuthContext {
   name: string;
 
   /**
-   * Liberação da conta pela RFitness. Enquanto não for `APPROVED` a sessão é
+   * Liberação da conta pela RFitness. Enquanto não for `ACTIVE` a sessão é
    * válida — a pessoa realmente se cadastrou — mas não dá acesso a nada.
    */
   accessStatus: AccessStatus;
@@ -65,25 +67,17 @@ async function loadMemberships(authUserId: string): Promise<GymMembership[]> {
 }
 
 /**
- * Liberação da conta.
+ * Contexto da request atual, ou null se não houver sessão válida.
  *
- * Quem já tem perfil em alguma academia está liberado por definição — inclusive
- * as contas anteriores a este fluxo, que nunca passaram por um cadastro. A
- * consulta ao cadastro só acontece para quem não tem vínculo nenhum, que é
- * exatamente o caso pendente.
+ * As três consultas saem juntas, não em cascata: são independentes, e
+ * encadeá-las somava uma ida ao banco ao tempo de cada navegação — o layout, a
+ * página e cada rota de API passam por aqui.
+ *
+ * `cache` é por request (React Server Components): o layout do dashboard e a
+ * página que ele renderiza compartilham o mesmo resultado em vez de repetir
+ * tudo, incluindo a validação da sessão no Supabase, que é chamada de rede.
  */
-async function loadAccessStatus(authUserId: string, hasMembership: boolean): Promise<AccessStatus> {
-  if (hasMembership) return "APPROVED";
-
-  const request = await prisma.accessRequest.findUnique({
-    where: { authUserId },
-    select: { status: true },
-  });
-  return request?.status ?? "APPROVED";
-}
-
-/** Contexto da request atual, ou null se não houver sessão válida. */
-export async function getAuthContext(): Promise<AuthContext | null> {
+export const getAuthContext = cache(async function getAuthContext(): Promise<AuthContext | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
   if (error) return null;
@@ -91,22 +85,28 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   const identity = identityFromUser(data.user);
   if (!identity) return null;
 
-  const [memberships, platformAdmin, cookieStore] = await Promise.all([
+  const [memberships, platformAdmin, account, cookieStore] = await Promise.all([
     loadMemberships(identity.authUserId),
     prisma.platformAdmin.findUnique({
       where: { authUserId: identity.authUserId },
       select: { id: true },
+    }),
+    prisma.managerAccount.findUnique({
+      where: { authUserId: identity.authUserId },
+      select: { status: true },
     }),
     cookies(),
   ]);
 
   const active = pickActiveGym(memberships, cookieStore.get(ACTIVE_GYM_COOKIE)?.value ?? null);
 
-  // Admin de plataforma não passa por liberação: quem libera é ele.
-  const accessStatus =
+  // Admin de plataforma não passa por liberação — quem libera é ele. Conta sem
+  // registro é anterior a este fluxo: se tem perfil em alguma academia, está
+  // liberada por definição.
+  const accessStatus: AccessStatus =
     platformAdmin !== null
-      ? "APPROVED"
-      : await loadAccessStatus(identity.authUserId, memberships.length > 0);
+      ? "ACTIVE"
+      : (account?.status ?? (memberships.length > 0 ? "ACTIVE" : "PENDING"));
 
   return {
     ...identity,
@@ -116,4 +116,4 @@ export async function getAuthContext(): Promise<AuthContext | null> {
     gymId: active?.gymId ?? "",
     roles: active?.roles ?? [],
   };
-}
+});

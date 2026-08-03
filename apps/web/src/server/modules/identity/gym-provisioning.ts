@@ -95,6 +95,49 @@ export async function provisionGym(input: ProvisionGymInput): Promise<Provisione
 }
 
 /**
+ * Garante o perfil ADMIN de um gestor numa academia que já existe.
+ *
+ * Idempotente: chamar de novo para quem já tem acesso não duplica nem falha —
+ * é o que permite usar a mesma operação para conceder acesso e para trocar o
+ * dono da unidade.
+ */
+export async function attachManagerToGym(input: {
+  gymId: string;
+  authUserId: string;
+  name: string;
+  email: string;
+}): Promise<{ userId: string }> {
+  const email = input.email.trim().toLowerCase();
+
+  return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    const user = await tx.user.upsert({
+      where: { authUserId_gymId: { authUserId: input.authUserId, gymId: input.gymId } },
+      update: { status: "ACTIVE" },
+      create: {
+        authUserId: input.authUserId,
+        gymId: input.gymId,
+        name: input.name.trim(),
+        email,
+      },
+      select: { id: true },
+    });
+
+    const adminRole = await tx.role.findUniqueOrThrow({
+      where: { gymId_name: { gymId: input.gymId, name: "ADMIN" } },
+      select: { id: true },
+    });
+
+    await tx.userRole.upsert({
+      where: { userId_roleId: { userId: user.id, roleId: adminRole.id } },
+      update: {},
+      create: { userId: user.id, roleId: adminRole.id },
+    });
+
+    return { userId: user.id };
+  });
+}
+
+/**
  * Republica em `app_metadata.gym_ids` a lista de academias da pessoa.
  *
  * Esse metadata não autoriza nada na API — o servidor lê os vínculos do banco.
