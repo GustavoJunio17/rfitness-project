@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 const PROTECTED_PREFIX = "/dashboard";
-const AUTH_ROUTES = ["/login", "/cadastro"];
+const AUTH_ROUTES = ["/login", "/solicitar-acesso"];
 
 /**
  * Renova a sessão do Supabase a cada navegação (Server Component não pode

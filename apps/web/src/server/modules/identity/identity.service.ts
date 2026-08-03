@@ -1,181 +1,276 @@
 import {
-  buildGymSlugBase,
   conflictError,
   evaluatePassword,
+  forbiddenError,
   notFoundError,
-  resolveGymSlug,
   validationError,
   type Role,
 } from "@rfitness/core";
+import { createClient } from "@supabase/supabase-js";
 import { prisma } from "../../db";
+import { getEnv } from "../../env";
 import { getSupabaseAdmin } from "../../supabase/admin";
 import { writeAuditLog } from "../../audit/audit-log";
+import type { AuthContext, GymMembership } from "../../auth/context";
+import { provisionGym, syncGymIdsMetadata } from "./gym-provisioning";
 
-const SYSTEM_ROLES: Role[] = ["ADMIN", "RECEPTION", "STOCKIST", "FINANCE", "TRAINER"];
-
-const BILLING_OFFSETS = [-1, 0, 1, 3, 7, 15];
-
-export interface RegisterGymInput {
-  gymName: string;
-  adminName: string;
-  adminEmail: string;
-  adminPassword: string;
+export interface GymSummary {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+  isOwner: boolean;
+  roles: Role[];
+  createdAt: Date;
+  counts: { students: number; products: number; users: number };
 }
 
 export interface CurrentUserDto {
-  id: string;
+  /** Perfil na academia ativa. `null` para admin de plataforma sem academia. */
+  id: string | null;
   name: string;
   email: string;
+  isPlatformAdmin: boolean;
   roles: Role[];
-  gym: { id: string; name: string; slug: string; whatsappInstanceName: string | null };
+  gym: { id: string; name: string; slug: string; whatsappInstanceName: string | null } | null;
+  memberships: GymMembership[];
 }
 
-/**
- * Cadastro de academia: cria o usuário no Supabase Auth e o tenant no banco.
- *
- * Ordem importa. O usuário de Auth vem primeiro porque `gym_id` precisa existir
- * em `app_metadata`… mas o gym só existe depois. Resolvemos criando o gym na
- * transação, depois o usuário de Auth com o metadata correto e, se a gravação do
- * perfil falhar, apagando o usuário de Auth — assim não sobra credencial órfã
- * capaz de logar sem tenant.
- */
-export async function registerGym(
-  input: RegisterGymInput,
-  meta: { ip: string | null; userAgent: string | null },
-): Promise<{ gymId: string; userId: string }> {
-  // A força da senha é conferida aqui também: o medidor da tela é conveniência,
-  // não barreira — quem chama a API direto passa pela mesma regra.
-  const strength = evaluatePassword(input.adminPassword, [input.adminName, input.adminEmail, input.gymName]);
-  if (!strength.acceptable) {
-    throw validationError(strength.hint ?? "Escolha uma senha mais forte.");
+/** Perfil da sessão atual, com a rede de academias e a unidade ativa. */
+export async function getCurrentUser(auth: AuthContext): Promise<CurrentUserDto> {
+  const base = {
+    name: auth.name,
+    email: auth.email,
+    isPlatformAdmin: auth.isPlatformAdmin,
+    memberships: auth.memberships,
+  };
+
+  if (!auth.gymId) {
+    return { ...base, id: null, roles: [], gym: null };
   }
 
-  // Slug interno derivado do nome; colisão resolve com sufixo em vez de erro na
-  // cara do usuário, que nem sabe que esse identificador existe.
-  const base = buildGymSlugBase(input.gymName);
-  const conflicting = await prisma.gym.findMany({
-    where: { slug: { startsWith: base } },
-    select: { slug: true },
-  });
-  const slug = resolveGymSlug(input.gymName, conflicting.map((gym) => gym.slug));
-
-  const supabase = getSupabaseAdmin();
-
-  // 1. Tenant + papéis do sistema + regras de cobrança padrão.
-  const gym = await prisma.$transaction(async (tx) => {
-    const created = await tx.gym.create({ data: { name: input.gymName.trim(), slug } });
-
-    await tx.role.createMany({
-      data: SYSTEM_ROLES.map((name) => ({ gymId: created.id, name, isSystem: true })),
-    });
-    await tx.billingRule.createMany({
-      data: BILLING_OFFSETS.map((offsetDays) => ({
-        gymId: created.id,
-        offsetDays,
-        messageTemplate:
-          offsetDays < 0
-            ? "Olá {{nome}}! Sua mensalidade vence em {{dias}} dia(s)."
-            : offsetDays === 0
-              ? "Olá {{nome}}! Sua mensalidade vence hoje."
-              : "Olá {{nome}}! Sua mensalidade está em atraso há {{dias}} dia(s).",
-      })),
-    });
-
-    return created;
-  });
-
-  // 2. Usuário no Supabase Auth com gym_id/roles em app_metadata (só o service
-  //    role escreve app_metadata — o usuário não consegue se auto-promover).
-  const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-    email: input.adminEmail.trim().toLowerCase(),
-    password: input.adminPassword,
-    email_confirm: true,
-    app_metadata: { gym_id: gym.id, gym_slug: slug, roles: ["ADMIN"] },
-    user_metadata: { name: input.adminName.trim() },
-  });
-
-  if (authError || !authUser.user) {
-    await prisma.gym.delete({ where: { id: gym.id } }).catch(() => undefined);
-    if (/already been registered|already exists/i.test(authError?.message ?? "")) {
-      throw conflictError("Este e-mail já está cadastrado.");
-    }
-    throw validationError(`Falha ao criar o usuário administrador: ${authError?.message}`);
-  }
-
-  // 3. Perfil + vínculo com o papel ADMIN.
-  try {
-    const adminRole = await prisma.role.findUniqueOrThrow({
-      where: { gymId_name: { gymId: gym.id, name: "ADMIN" } },
-    });
-
-    const user = await prisma.user.create({
-      data: {
-        authUserId: authUser.user.id,
-        gymId: gym.id,
-        name: input.adminName.trim(),
-        email: input.adminEmail.trim().toLowerCase(),
-        roles: { create: { roleId: adminRole.id } },
-      },
-    });
-
-    await writeAuditLog({
-      gymId: gym.id,
-      userId: user.id,
-      action: "auth.register_gym",
-      entityType: "Gym",
-      entityId: gym.id,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-    });
-
-    return { gymId: gym.id, userId: user.id };
-  } catch (error) {
-    // Rollback do usuário de Auth: sem isso ficaria uma credencial válida
-    // apontando para um tenant sem perfil.
-    await supabase.auth.admin.deleteUser(authUser.user.id).catch(() => undefined);
-    await prisma.gym.delete({ where: { id: gym.id } }).catch(() => undefined);
-    throw error;
-  }
-}
-
-/** Perfil da sessão atual. Cria o perfil se o usuário de Auth ainda não tiver um. */
-export async function getCurrentUser(auth: {
-  authUserId: string;
-  gymId: string;
-  email: string;
-  name: string;
-  roles: Role[];
-}): Promise<CurrentUserDto> {
   const gym = await prisma.gym.findUnique({
     where: { id: auth.gymId },
     select: { id: true, name: true, slug: true, whatsappInstanceName: true },
   });
   if (!gym) throw notFoundError("Academia não encontrada.");
 
-  const user = await prisma.user.upsert({
-    where: { authUserId: auth.authUserId },
-    update: { lastLoginAt: new Date() },
-    create: {
-      authUserId: auth.authUserId,
-      gymId: auth.gymId,
-      name: auth.name,
-      email: auth.email,
-      lastLoginAt: new Date(),
-    },
-    select: { id: true, name: true, email: true },
+  // O perfil já existe (nasce junto com a academia); aqui só se registra o
+  // acesso. `updateMany` porque a operação é idempotente e não deve estourar se
+  // o perfil for desativado entre a leitura do contexto e agora.
+  await prisma.user.updateMany({
+    where: { authUserId: auth.authUserId, gymId: auth.gymId },
+    data: { lastLoginAt: new Date() },
   });
 
-  return { id: user.id, name: user.name, email: user.email, roles: auth.roles, gym };
+  const user = await prisma.user.findUnique({
+    where: { authUserId_gymId: { authUserId: auth.authUserId, gymId: auth.gymId } },
+    select: { id: true },
+  });
+
+  return { ...base, id: user?.id ?? null, roles: auth.roles, gym };
 }
 
 /**
  * id do `User` (perfil) a partir do id de Auth — usado onde o banco precisa da
- * FK do perfil (ex.: `Sale.employeeId`), não do id do Supabase.
+ * FK do perfil (ex.: `Sale.employeeId`), não do id do Supabase. É por academia:
+ * a mesma pessoa tem um perfil diferente em cada unidade.
  */
 export async function resolveUserId(authUserId: string, gymId: string): Promise<string> {
-  const user = await prisma.user.findUnique({ where: { authUserId }, select: { id: true, gymId: true } });
-  if (!user || user.gymId !== gymId) {
-    throw notFoundError("Perfil de usuário não encontrado nesta academia.");
-  }
+  const user = await prisma.user.findUnique({
+    where: { authUserId_gymId: { authUserId, gymId } },
+    select: { id: true },
+  });
+  if (!user) throw notFoundError("Perfil de usuário não encontrado nesta academia.");
   return user.id;
+}
+
+/** A rede do gestor: academias em que ele tem perfil, com um resumo de cada. */
+export async function listMyGyms(auth: AuthContext): Promise<GymSummary[]> {
+  const gymIds = auth.memberships.map((membership) => membership.gymId);
+  if (gymIds.length === 0) return [];
+
+  const gyms = await prisma.gym.findMany({
+    where: { id: { in: gymIds } },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      isActive: true,
+      ownerAuthUserId: true,
+      createdAt: true,
+      _count: { select: { students: true, products: true, users: true } },
+    },
+    orderBy: { name: "asc" },
+  });
+
+  const rolesByGym = new Map(auth.memberships.map((membership) => [membership.gymId, membership.roles]));
+
+  return gyms.map((gym) => ({
+    id: gym.id,
+    name: gym.name,
+    slug: gym.slug,
+    isActive: gym.isActive,
+    isOwner: gym.ownerAuthUserId === auth.authUserId,
+    roles: rolesByGym.get(gym.id) ?? [],
+    createdAt: gym.createdAt,
+    counts: {
+      students: gym._count.students,
+      products: gym._count.products,
+      users: gym._count.users,
+    },
+  }));
+}
+
+/**
+ * Nova unidade da rede do gestor.
+ *
+ * Quem já tem conta cria quantas academias quiser — a barreira da RFitness é a
+ * entrada na plataforma (aprovação do pedido de acesso), não a abertura de mais
+ * uma unidade por quem já foi aprovado.
+ */
+export async function createGym(
+  auth: AuthContext,
+  input: { name: string },
+  meta: { ip: string | null; userAgent: string | null },
+): Promise<GymSummary> {
+  const name = input.name.trim();
+
+  const duplicate = await prisma.gym.findFirst({
+    where: { name, ownerAuthUserId: auth.authUserId },
+    select: { id: true },
+  });
+  if (duplicate) throw conflictError("Você já tem uma academia com esse nome.");
+
+  const gym = await provisionGym({
+    gymName: name,
+    ownerAuthUserId: auth.authUserId,
+    ownerName: auth.name,
+    ownerEmail: auth.email,
+  });
+
+  await syncGymIdsMetadata(auth.authUserId);
+  await writeAuditLog({
+    gymId: gym.id,
+    userId: gym.userId,
+    action: "gym.create",
+    entityType: "Gym",
+    entityId: gym.id,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
+
+  return {
+    id: gym.id,
+    name: gym.name,
+    slug: gym.slug,
+    isActive: true,
+    isOwner: true,
+    roles: ["ADMIN"],
+    createdAt: new Date(),
+    counts: { students: 0, products: 0, users: 1 },
+  };
+}
+
+/** Renomear/desativar a unidade — só o gestor dono da rede. */
+export async function updateGym(
+  auth: AuthContext,
+  gymId: string,
+  input: { name?: string; isActive?: boolean },
+  meta: { ip: string | null; userAgent: string | null },
+): Promise<GymSummary> {
+  const gym = await prisma.gym.findUnique({
+    where: { id: gymId },
+    select: { id: true, ownerAuthUserId: true },
+  });
+  if (!gym) throw notFoundError("Academia não encontrada.");
+  if (gym.ownerAuthUserId !== auth.authUserId) {
+    throw forbiddenError("Só o gestor dono da academia pode alterá-la.");
+  }
+
+  const updated = await prisma.gym.update({
+    where: { id: gymId },
+    data: {
+      ...(input.name !== undefined ? { name: input.name.trim() } : {}),
+      ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+    },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      isActive: true,
+      createdAt: true,
+      _count: { select: { students: true, products: true, users: true } },
+    },
+  });
+
+  await writeAuditLog({
+    gymId,
+    action: "gym.update",
+    entityType: "Gym",
+    entityId: gymId,
+    after: input,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
+
+  return {
+    id: updated.id,
+    name: updated.name,
+    slug: updated.slug,
+    isActive: updated.isActive,
+    createdAt: updated.createdAt,
+    isOwner: true,
+    roles: auth.memberships.find((membership) => membership.gymId === gymId)?.roles ?? [],
+    counts: {
+      students: updated._count.students,
+      products: updated._count.products,
+      users: updated._count.users,
+    },
+  };
+}
+
+/**
+ * Valida a troca de unidade. O cookie é escrito pela rota; aqui só se confirma
+ * que o destino é mesmo da pessoa — o resto do sistema confia em `auth.gymId`.
+ */
+export function assertMembership(auth: AuthContext, gymId: string): GymMembership {
+  const membership = auth.memberships.find((candidate) => candidate.gymId === gymId);
+  if (!membership) throw notFoundError("Você não tem acesso a esta academia.");
+  return membership;
+}
+
+/**
+ * Troca de senha da própria conta.
+ *
+ * A senha atual é conferida com um login descartável em vez de confiar só na
+ * sessão: cookie roubado não deve virar troca de senha. A força da nova passa
+ * pela mesma regra do resto do sistema.
+ */
+export async function changeOwnPassword(
+  auth: AuthContext,
+  input: { currentPassword: string; newPassword: string },
+): Promise<void> {
+  const strength = evaluatePassword(input.newPassword, [auth.name, auth.email]);
+  if (!strength.acceptable) {
+    throw validationError(strength.hint ?? "Escolha uma senha mais forte.");
+  }
+  if (input.currentPassword === input.newPassword) {
+    throw validationError("A nova senha precisa ser diferente da atual.");
+  }
+
+  const env = getEnv();
+  const verifier = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { error: signInError } = await verifier.auth.signInWithPassword({
+    email: auth.email,
+    password: input.currentPassword,
+  });
+  if (signInError) throw validationError("Senha atual incorreta.");
+
+  const { error } = await getSupabaseAdmin().auth.admin.updateUserById(auth.authUserId, {
+    password: input.newPassword,
+  });
+  if (error) throw validationError(`Não foi possível alterar a senha: ${error.message}`);
 }

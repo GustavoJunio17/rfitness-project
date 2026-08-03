@@ -3,6 +3,7 @@ import { getAuthContext } from "@/server/auth/context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { RealtimeBridge } from "@/components/layout/realtime-bridge";
+import { NoGymGate } from "@/components/layout/no-gym-gate";
 
 // Shell autenticado depende de cookies de sessão — dinâmico por definição.
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex min-h-screen">
       <RealtimeBridge />
+      <NoGymGate />
       <Sidebar />
       <div className="flex flex-1 flex-col">
         <Topbar userName={auth.name} userEmail={auth.email} />

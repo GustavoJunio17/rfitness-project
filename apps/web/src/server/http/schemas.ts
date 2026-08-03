@@ -32,11 +32,38 @@ const positiveInt = z.number().int().positive();
 
 // O slug da academia não entra aqui de propósito: é interno e derivado do nome
 // no servidor, para o cliente não escolher nem descobrir o identificador.
-export const registerGymSchema = z.object({
+//
+// Também não há schema de auto-cadastro: ninguém cria a própria conta. O
+// formulário público só abre um pedido, que a administração da RFitness aprova.
+export const accessRequestSchema = z.object({
+  requesterName: z.string().trim().min(2).max(120),
+  requesterEmail: z.string().trim().email(),
+  phone: z.string().trim().max(20).optional().nullable(),
   gymName: z.string().trim().min(2).max(120),
-  adminName: z.string().trim().min(2).max(120),
-  adminEmail: z.string().trim().email(),
-  adminPassword: z.string().min(PASSWORD_MIN_LENGTH, "A senha deve ter no mínimo 8 caracteres.").max(72),
+  notes: z.string().trim().max(1000).optional().nullable(),
+});
+
+export const accessRequestStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
+export const accessRequestQuery = z.object({ status: accessRequestStatusSchema.optional() });
+
+export const rejectAccessRequestSchema = z.object({
+  reason: z.string().trim().min(3, "Explique o motivo — ele vai para o histórico.").max(500),
+});
+
+export const createGymSchema = z.object({ name: z.string().trim().min(2).max(120) });
+
+export const updateGymSchema = z
+  .object({
+    name: z.string().trim().min(2).max(120).optional(),
+    isActive: z.boolean().optional(),
+  })
+  .refine((value) => value.name !== undefined || value.isActive !== undefined, "Nada para alterar.");
+
+export const activeGymSchema = z.object({ gymId: z.string().uuid() });
+
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Informe a senha atual."),
+  newPassword: z.string().min(PASSWORD_MIN_LENGTH, "A senha deve ter no mínimo 8 caracteres.").max(72),
 });
 
 export const cartItemsSchema = z

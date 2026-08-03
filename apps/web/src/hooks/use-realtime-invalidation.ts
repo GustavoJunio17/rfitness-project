@@ -41,7 +41,9 @@ const QUERY_KEYS_BY_EVENT: Record<string, string[][]> = {
 export function useRealtimeInvalidation() {
   const queryClient = useQueryClient();
   const { data: session } = useSession();
-  const gymId = session?.gym.id;
+  // Sem academia ativa (admin de plataforma, gestor recém-aprovado) não há canal
+  // a assinar — o gymId do filtro simplesmente não existe.
+  const gymId = session?.gym?.id;
 
   useEffect(() => {
     if (!gymId) return undefined;

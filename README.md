@@ -38,12 +38,20 @@ sempre vira 500 genérico — mensagem interna não vaza.
   faturamento ou lucro.
 - **Sem `@nestjs/schedule`.** Os jobs diários são Vercel Cron Jobs (`vercel.json`) batendo em
   `/api/cron/*`, autenticados por `CRON_SECRET`.
-- **Supabase Auth é dono de credencial e sessão.** `gym_id` e `roles` vivem em
-  `app_metadata` (gravável só com service role), então o usuário não consegue se promover a
-  ADMIN. O servidor lê o tenant do JWT a cada request — nenhuma rota aceita `gymId` do cliente.
+- **Supabase Auth é dono de credencial e sessão.** Só isso: quem é a pessoa. O vínculo com
+  academia e os papéis vêm do banco (`users` + `user_roles`) a cada request — um metadata
+  copiado do JWT seria uma segunda fonte de verdade fadada a divergir da tabela de papéis.
+  Nenhuma rota aceita `gymId` do cliente.
+- **Não existe auto-cadastro.** A RFitness engloba as academias e libera cada gestor à mão: o
+  formulário público (`/solicitar-acesso`) só abre uma `AccessRequest`; um `PlatformAdmin`
+  aprova e é aí que nascem a conta no Auth e a primeira academia.
+- **Um gestor, várias academias.** `users.authUserId` não é único — a pessoa tem um perfil por
+  unidade, com papéis próprios em cada uma. A unidade ativa da sessão vem de um cookie que o
+  servidor confronta com os vínculos reais, então trocar o cookie não troca de tenant.
 - **RLS como segunda barreira.** Todas as tabelas de negócio têm RLS ligado **sem policy**:
-  a anon key não lê nada direto. A única exceção é `realtime_events`, com SELECT escopado pelo
-  `gym_id` do JWT.
+  a anon key não lê nada direto. A única exceção é `realtime_events`, com SELECT escopado pela
+  lista `app_metadata.gym_ids` do JWT — único lugar onde esse metadata ainda importa, porque a
+  policy só enxerga o token.
 - **Dinheiro nunca é float.** `Decimal(10,2)` no banco, `number` arredondado em centavos no
   core (`round2`/`sumMoney`), string ISO nas respostas.
 
@@ -62,7 +70,12 @@ pnpm db:seed                    # academia demo + admin no Supabase Auth + catá
 pnpm dev                        # http://localhost:3000
 ```
 
-Login da demo: `admin@rfitness-demo.com` / `Rfitness@123`.
+Acessos da demo:
+
+| Perfil             | Login                                          | Onde cai                |
+| ------------------ | ---------------------------------------------- | ----------------------- |
+| Gestor de academia | `admin@rfitness-demo.com` / `Rfitness@123`     | `/dashboard`            |
+| Admin da RFitness  | `plataforma@rfitness.com` / `Plataforma@123`   | `/dashboard/plataforma` |
 
 Sem projeto Supabase à mão, `docker compose --profile postgres up -d` sobe um Postgres cru —
 suficiente para migrations e para o smoke de integração, mas **não** para login (Auth) nem
@@ -133,8 +146,9 @@ dos sinais de tempo real.
 
 ### Não validado neste ambiente
 
-- Login, cadastro e RLS **contra um projeto Supabase real** (o smoke usa Postgres cru, sem
-  Auth/Realtime/Storage).
+- Login, aprovação de pedido de acesso e RLS **contra um projeto Supabase real** (o smoke usa
+  Postgres cru, sem Auth/Realtime/Storage). O SQL da migration — inclusive `auth_gym_ids()`
+  com claim ausente, vazio e malformado — foi exercitado no Postgres do compose.
 - Upload de foto no Supabase Storage.
 - Conversa real do agente no WhatsApp (sem instância Evolution nem chave Anthropic aqui).
 - Leitura de código de barras pela câmera (`html5-qrcode`) — precisa de navegador real.

@@ -9,10 +9,17 @@ const adminAuth: AuthContext = {
   gymId: "gym-1",
   email: "admin@demo.com",
   name: "Admin",
+  isPlatformAdmin: false,
+  memberships: [{ gymId: "gym-1", gymName: "Academia 1", gymSlug: "academia-1", roles: ["ADMIN"] }],
   roles: ["ADMIN"],
 };
 
 const stockistAuth: AuthContext = { ...adminAuth, roles: ["STOCKIST"] };
+
+/** Gestor recém-aprovado / admin de plataforma: sessão válida, sem tenant. */
+const noGymAuth: AuthContext = { ...adminAuth, gymId: "", memberships: [], roles: [] };
+
+const platformAuth: AuthContext = { ...noGymAuth, isPlatformAdmin: true };
 
 const request = (url = "https://app.test/api/x", init?: RequestInit) => new Request(url, init);
 
@@ -54,6 +61,47 @@ describe("defineRoute — autenticação", () => {
     const response = await handler(request());
 
     await expect(response.json()).resolves.toEqual({ gymId: "gym-1" });
+  });
+});
+
+describe("defineRoute — escopo", () => {
+  it("rota de academia responde 409 quando não há academia ativa", async () => {
+    const handler = defineRoute({ handler: async () => ({ ok: true }) }, deps(noGymAuth));
+    const response = await handler(request());
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).error.code).toBe("NO_ACTIVE_GYM");
+  });
+
+  it("escopo `any` atende quem ainda não tem academia", async () => {
+    const handler = defineRoute(
+      { scope: "any", handler: async ({ auth }) => ({ memberships: auth.memberships.length }) },
+      deps(noGymAuth),
+    );
+    const response = await handler(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ memberships: 0 });
+  });
+
+  it("rota de plataforma recusa gestor de academia", async () => {
+    const handler = defineRoute(
+      { scope: "platform", handler: async () => ({ ok: true }) },
+      deps(adminAuth),
+    );
+    const response = await handler(request());
+
+    expect(response.status).toBe(403);
+  });
+
+  it("rota de plataforma libera o admin da RFitness mesmo sem academia", async () => {
+    const handler = defineRoute(
+      { scope: "platform", handler: async () => ({ ok: true }) },
+      deps(platformAuth),
+    );
+    const response = await handler(request());
+
+    expect(response.status).toBe(200);
   });
 });
 

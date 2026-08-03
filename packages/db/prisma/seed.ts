@@ -16,6 +16,11 @@ const GYM_SLUG = "rfitness-demo";
 const ADMIN_EMAIL = "admin@rfitness-demo.com";
 const ADMIN_PASSWORD = "Rfitness@123";
 
+// Admin da plataforma: quem aprova os pedidos de acesso dos gestores. Não tem
+// academia — o console dele é o /dashboard/plataforma.
+const PLATFORM_EMAIL = "plataforma@rfitness.com";
+const PLATFORM_PASSWORD = "Plataforma@123";
+
 const PERMISSION_KEYS = [
   "catalog:read",
   "catalog:write",
@@ -64,26 +69,32 @@ function requireEnv(name: string): string {
   return value;
 }
 
-/**
- * Cria (ou atualiza) o admin no Supabase Auth. `app_metadata` é gravado pelo
- * service role e não pode ser alterado pelo próprio usuário — por isso é o lugar
- * certo para `gym_id` e `roles`.
- */
-async function upsertAuthAdmin(gymId: string): Promise<string> {
+interface AuthUserSeed {
+  email: string;
+  password: string;
+  name: string;
+  /**
+   * `app_metadata` é gravado pelo service role e o próprio usuário não altera.
+   * Aqui vai só `gym_ids`, que a policy de RLS do Realtime lê do JWT — papéis e
+   * vínculo de tenant são lidos do banco a cada request, não daqui.
+   */
+  appMetadata: Record<string, unknown>;
+}
+
+/** Cria (ou ressincroniza) um usuário no Supabase Auth. */
+async function upsertAuthUser(seed: AuthUserSeed): Promise<string> {
   const supabase = createClient(
     requireEnv("NEXT_PUBLIC_SUPABASE_URL"),
     requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
     { auth: { autoRefreshToken: false, persistSession: false } },
   );
 
-  const appMetadata = { gym_id: gymId, gym_slug: GYM_SLUG, roles: ["ADMIN"] };
-
   const { data: created, error } = await supabase.auth.admin.createUser({
-    email: ADMIN_EMAIL,
-    password: ADMIN_PASSWORD,
+    email: seed.email,
+    password: seed.password,
     email_confirm: true,
-    app_metadata: appMetadata,
-    user_metadata: { name: "Administrador RFitness" },
+    app_metadata: seed.appMetadata,
+    user_metadata: { name: seed.name },
   });
 
   if (!error && created.user) return created.user.id;
@@ -91,21 +102,21 @@ async function upsertAuthAdmin(gymId: string): Promise<string> {
   const alreadyExists =
     error?.status === 422 || /already been registered|already exists/i.test(error?.message ?? "");
   if (!alreadyExists) {
-    throw new Error(`Falha ao criar o admin no Supabase Auth: ${error?.message}`);
+    throw new Error(`Falha ao criar ${seed.email} no Supabase Auth: ${error?.message}`);
   }
 
   // Já existe: localiza pelo e-mail e ressincroniza metadata/senha.
   const { data: list, error: listError } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
   if (listError) throw new Error(`Falha ao listar usuários do Auth: ${listError.message}`);
 
-  const existing = list.users.find((user) => user.email?.toLowerCase() === ADMIN_EMAIL);
-  if (!existing) throw new Error(`Usuário ${ADMIN_EMAIL} existe no Auth mas não foi encontrado na listagem.`);
+  const existing = list.users.find((user) => user.email?.toLowerCase() === seed.email);
+  if (!existing) throw new Error(`Usuário ${seed.email} existe no Auth mas não apareceu na listagem.`);
 
   const { error: updateError } = await supabase.auth.admin.updateUserById(existing.id, {
-    password: ADMIN_PASSWORD,
-    app_metadata: appMetadata,
+    password: seed.password,
+    app_metadata: seed.appMetadata,
   });
-  if (updateError) throw new Error(`Falha ao atualizar o admin no Auth: ${updateError.message}`);
+  if (updateError) throw new Error(`Falha ao atualizar ${seed.email} no Auth: ${updateError.message}`);
 
   return existing.id;
 }
@@ -152,11 +163,37 @@ async function main() {
     }
   }
 
-  // --- Admin (Supabase Auth + perfil) ------------------------------------
-  const authUserId = await upsertAuthAdmin(gym.id);
+  // --- Admin da plataforma (RFitness) ------------------------------------
+  // Sem academia: `gym_ids` vazio. Ele aprova o acesso dos gestores e não opera
+  // nenhum tenant.
+  const platformAuthUserId = await upsertAuthUser({
+    email: PLATFORM_EMAIL,
+    password: PLATFORM_PASSWORD,
+    name: "Administração RFitness",
+    appMetadata: { gym_ids: [] },
+  });
+  await prisma.platformAdmin.upsert({
+    where: { authUserId: platformAuthUserId },
+    update: { name: "Administração RFitness", email: PLATFORM_EMAIL },
+    create: {
+      authUserId: platformAuthUserId,
+      name: "Administração RFitness",
+      email: PLATFORM_EMAIL,
+    },
+  });
+
+  // --- Gestor da academia demo (Supabase Auth + perfil) ------------------
+  const authUserId = await upsertAuthUser({
+    email: ADMIN_EMAIL,
+    password: ADMIN_PASSWORD,
+    name: "Administrador RFitness",
+    appMetadata: { gym_ids: [gym.id] },
+  });
+  await prisma.gym.update({ where: { id: gym.id }, data: { ownerAuthUserId: authUserId } });
+
   const admin = await prisma.user.upsert({
-    where: { authUserId },
-    update: { gymId: gym.id, name: "Administrador RFitness", email: ADMIN_EMAIL, status: "ACTIVE" },
+    where: { authUserId_gymId: { authUserId, gymId: gym.id } },
+    update: { name: "Administrador RFitness", email: ADMIN_EMAIL, status: "ACTIVE" },
     create: {
       authUserId,
       gymId: gym.id,
@@ -390,7 +427,8 @@ async function main() {
     [
       "Seed concluído.",
       `  Academia: ${gym.name} (slug: ${gym.slug})`,
-      `  Login:    ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`,
+      `  Gestor:      ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}`,
+      `  Plataforma:  ${PLATFORM_EMAIL} / ${PLATFORM_PASSWORD}`,
       `  Catálogo: ${productSeeds.length} produtos, ${planSeeds.length} planos, ${studentSeeds.length} alunos`,
     ].join("\n"),
   );

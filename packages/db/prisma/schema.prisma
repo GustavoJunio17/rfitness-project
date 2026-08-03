@@ -18,6 +18,72 @@ datasource db {
 }
 
 // =========================================================================
+// PLATAFORMA (RFitness)
+//
+// A RFitness é a empresa que engloba as academias. Existem dois níveis de
+// acesso, e eles não se misturam:
+//
+//   * Plataforma — `PlatformAdmin`. É quem libera gestores para entrar. Não
+//     pertence a nenhuma academia e não enxerga dado operacional de tenant.
+//   * Academia — `User` + `Role`, escopado por `gymId`. É o gestor e a equipe.
+//
+// Não existe auto-cadastro: quem quer entrar abre uma `AccessRequest`, e um
+// admin de plataforma aprova. A aprovação cria as credenciais e a primeira
+// academia; daí em diante o próprio gestor cria as academias seguintes.
+// =========================================================================
+
+/// Admin da RFitness. Fonte de verdade do privilégio de plataforma — checar uma
+/// flag em `app_metadata` daria dois lugares para a mesma resposta, e o que
+/// estivesse desatualizado seria o que concede acesso.
+model PlatformAdmin {
+  id String @id @default(uuid())
+
+  /// id em `auth.users` (Supabase Auth).
+  authUserId String @unique
+
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  reviewedRequests AccessRequest[] @relation("AccessRequestReviewer")
+
+  @@map("platform_admins")
+}
+
+enum AccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// Pedido de acesso à plataforma, aberto pelo formulário público.
+///
+/// Guardar o pedido em vez de criar a conta na hora é o que torna o cadastro
+/// controlado: nada existe no Auth até um admin de plataforma aprovar.
+model AccessRequest {
+  id             String              @id @default(uuid())
+  requesterName  String
+  requesterEmail String
+  phone          String?
+  gymName        String
+  notes          String?
+  status         AccessRequestStatus @default(PENDING)
+
+  reviewedAt     DateTime?
+  reviewedById   String?
+  reviewedBy     PlatformAdmin? @relation("AccessRequestReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  decisionReason String?
+  /// Academia criada na aprovação — trilha do pedido até o tenant.
+  createdGymId   String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([status, createdAt])
+  @@index([requesterEmail])
+  @@map("access_requests")
+}
+
+// =========================================================================
 // IDENTITY & ACCESS
 // =========================================================================
 
@@ -34,6 +100,11 @@ model Gym {
   accentColor    String  @default("#FFFFFF")
   timezone       String  @default("America/Sao_Paulo")
   isActive       Boolean @default(true)
+
+  /// Gestor dono da academia (`auth.users`). É quem pode renomear e desativar a
+  /// unidade; a rede de um mesmo gestor é justamente o conjunto de academias com
+  /// este valor.
+  ownerAuthUserId String?
 
   /// Instância da Evolution API desta academia — mapeia o webhook de mensagens
   /// recebidas de volta para o tenant correto.
@@ -60,6 +131,7 @@ model Gym {
   cashFlowEntries CashFlowEntry[]
   realtimeEvents  RealtimeEvent[]
 
+  @@index([ownerAuthUserId])
   @@map("gyms")
 }
 
@@ -76,7 +148,11 @@ model User {
   /// tabela vive em outro schema, fora do alcance do Prisma; a integridade é
   /// mantida no fluxo de cadastro (rollback do usuário de Auth se a transação
   /// do perfil falhar).
-  authUserId String @unique
+  ///
+  /// **Não é único**: uma pessoa que gerencia três academias tem três perfis,
+  /// um por tenant, com papéis próprios em cada um. O que é único é o par
+  /// (authUserId, gymId).
+  authUserId String
 
   gymId       String
   gym         Gym        @relation(fields: [gymId], references: [id], onDelete: Cascade)
@@ -93,7 +169,9 @@ model User {
   agentActions    AgentAction[]
 
   @@unique([gymId, email])
+  @@unique([authUserId, gymId])
   @@index([gymId])
+  @@index([authUserId])
   @@map("users")
 }
 

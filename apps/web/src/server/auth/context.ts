@@ -1,44 +1,59 @@
-import { isRole, type Role } from "@rfitness/core";
+import { cookies } from "next/headers";
+import type { Role } from "@rfitness/core";
+import { prisma } from "../db";
 import { createSupabaseServerClient } from "../supabase/server";
+import {
+  ACTIVE_GYM_COOKIE,
+  identityFromUser,
+  normalizeRoles,
+  pickActiveGym,
+  type GymMembership,
+} from "./identity";
+
+export { ACTIVE_GYM_COOKIE, type GymMembership };
 
 export interface AuthContext {
   /** id em `auth.users` (Supabase Auth). */
   authUserId: string;
-  gymId: string;
   email: string;
   name: string;
+
+  /** Admin da RFitness: administra a plataforma, não opera academia nenhuma. */
+  isPlatformAdmin: boolean;
+
+  /** Todas as academias em que a pessoa tem perfil ativo. */
+  memberships: GymMembership[];
+
+  /** Academia ativa. String vazia quando a pessoa não tem nenhuma. */
+  gymId: string;
+
+  /** Papéis **na academia ativa** — não na plataforma, não nas outras unidades. */
   roles: Role[];
 }
 
-interface SupabaseUserLike {
-  id: string;
-  email?: string | null;
-  app_metadata?: Record<string, unknown> | null;
-  user_metadata?: Record<string, unknown> | null;
-}
-
 /**
- * Traduz o usuário do Supabase Auth no contexto do tenant.
+ * Vínculos ativos da pessoa, direto do banco.
  *
- * `gym_id` e `roles` vivem em `app_metadata` — gravado só com service role, ou
- * seja, o próprio usuário não consegue se promover a ADMIN editando o perfil.
- * Papéis desconhecidos são descartados em vez de repassados adiante.
+ * Academia inativa não entra: desativar a unidade tem que tirá-la do seletor
+ * imediatamente, sem depender de o gestor deslogar para o JWT ser reemitido.
  */
-export function authContextFromUser(user: SupabaseUserLike | null | undefined): AuthContext | null {
-  if (!user) return null;
+async function loadMemberships(authUserId: string): Promise<GymMembership[]> {
+  const profiles = await prisma.user.findMany({
+    where: { authUserId, status: "ACTIVE", gym: { isActive: true } },
+    select: {
+      gymId: true,
+      gym: { select: { name: true, slug: true } },
+      roles: { select: { role: { select: { name: true } } } },
+    },
+    orderBy: { gym: { name: "asc" } },
+  });
 
-  const appMetadata = user.app_metadata ?? {};
-  const gymId = typeof appMetadata.gym_id === "string" ? appMetadata.gym_id : null;
-  if (!gymId) return null;
-
-  const rawRoles = Array.isArray(appMetadata.roles) ? appMetadata.roles : [];
-  const roles = rawRoles.filter((role): role is Role => typeof role === "string" && isRole(role));
-
-  const email = user.email ?? "";
-  const metadataName = user.user_metadata?.name;
-  const name = typeof metadataName === "string" && metadataName.length > 0 ? metadataName : email;
-
-  return { authUserId: user.id, gymId, email, name, roles };
+  return profiles.map((profile) => ({
+    gymId: profile.gymId,
+    gymName: profile.gym.name,
+    gymSlug: profile.gym.slug,
+    roles: normalizeRoles(profile.roles.map((link) => link.role.name)),
+  }));
 }
 
 /** Contexto da request atual, ou null se não houver sessão válida. */
@@ -46,5 +61,26 @@ export async function getAuthContext(): Promise<AuthContext | null> {
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.auth.getUser();
   if (error) return null;
-  return authContextFromUser(data.user);
+
+  const identity = identityFromUser(data.user);
+  if (!identity) return null;
+
+  const [memberships, platformAdmin, cookieStore] = await Promise.all([
+    loadMemberships(identity.authUserId),
+    prisma.platformAdmin.findUnique({
+      where: { authUserId: identity.authUserId },
+      select: { id: true },
+    }),
+    cookies(),
+  ]);
+
+  const active = pickActiveGym(memberships, cookieStore.get(ACTIVE_GYM_COOKIE)?.value ?? null);
+
+  return {
+    ...identity,
+    isPlatformAdmin: platformAdmin !== null,
+    memberships,
+    gymId: active?.gymId ?? "",
+    roles: active?.roles ?? [],
+  };
 }

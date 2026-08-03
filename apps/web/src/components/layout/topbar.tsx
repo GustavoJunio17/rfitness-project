@@ -7,6 +7,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "./theme-toggle";
 import { NotificationBell } from "./notification-bell";
+import { GymSwitcher } from "./gym-switcher";
 
 export function Topbar({ userName, userEmail }: { userName: string; userEmail: string }) {
   const router = useRouter();
@@ -28,6 +29,7 @@ export function Topbar({ userName, userEmail }: { userName: string; userEmail: s
         <p className="text-xs text-muted-foreground">{userEmail}</p>
       </div>
       <div className="flex items-center gap-2">
+        <GymSwitcher />
         <NotificationBell />
         <ThemeToggle />
         <Button variant="outline" size="sm" onClick={handleLogout} disabled={loading}>

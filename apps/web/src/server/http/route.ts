@@ -22,9 +22,21 @@ export interface RouteHandlerContext<TBody, TQuery, TParams> {
   params: TParams;
 }
 
+/**
+ * A quem a rota pertence:
+ *
+ *  * `gym` (padrão) — operação de uma academia. Exige academia ativa, e é o que
+ *    garante que todo handler possa usar `auth.gymId` sem checar se está vazio.
+ *  * `platform` — console da RFitness. Exige admin de plataforma.
+ *  * `any` — só sessão válida (perfil, lista de academias, troca de unidade),
+ *    usada por quem ainda não tem — ou não precisa de — academia ativa.
+ */
+export type RouteScope = "gym" | "platform" | "any";
+
 export interface RouteSpec<TBody, TQuery, TParams> {
   /** Rota sem sessão (webhook, cron, health). Nunca combine com `roles`. */
   public?: boolean;
+  scope?: RouteScope;
   roles?: Role[];
   body?: ZodType<TBody>;
   query?: ZodType<TQuery>;
@@ -137,7 +149,26 @@ export function defineRoute<TBody = undefined, TQuery = undefined, TParams = und
         if (!auth) {
           return errorResponse(401, "UNAUTHORIZED", "Sessão inválida ou expirada.");
         }
-        if (spec.roles?.length) {
+        const scope = spec.scope ?? "gym";
+
+        if (scope === "platform" && !auth.isPlatformAdmin) {
+          return errorResponse(403, "FORBIDDEN", "Área restrita à administração da RFitness.");
+        }
+
+        // Código próprio, não 403 genérico: o cliente precisa distinguir "você
+        // não pode" de "escolha uma academia primeiro" para mandar o gestor
+        // recém-aprovado à tela certa em vez de a um erro sem saída.
+        if (scope === "gym" && !auth.gymId) {
+          return errorResponse(
+            409,
+            "NO_ACTIVE_GYM",
+            "Nenhuma academia selecionada. Escolha ou cadastre uma academia para continuar.",
+          );
+        }
+
+        // Papel é sempre da academia ativa; em rota de plataforma ele não existe
+        // e exigir um seria negar acesso ao próprio admin da RFitness.
+        if (spec.roles?.length && scope !== "platform") {
           assertRole(auth.roles, spec.roles);
         }
       }
