@@ -12,7 +12,8 @@ export function useNotifications(unreadOnly = false) {
 export function useUnreadNotificationsCount() {
   return useQuery({
     queryKey: ["notifications-unread-count"],
-    queryFn: () => apiFetch<number>("/notifications/unread-count"),
+    // Mesma armadilha de `useOpenOrdersCount`: a rota devolve `{ count }`.
+    queryFn: async () => (await apiFetch<{ count: number }>("/notifications/unread-count")).count,
     refetchInterval: 60_000,
   });
 }

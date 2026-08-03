@@ -21,7 +21,9 @@ export function useOrder(id: string | null) {
 export function useOpenOrdersCount() {
   return useQuery({
     queryKey: ["orders-open-count"],
-    queryFn: () => apiFetch<number>("/orders/open-count"),
+    // A rota devolve `{ count }`, não o número solto. O tipo declarado dizia
+    // `number`, então o TypeScript não reclamava e a tela imprimia o objeto.
+    queryFn: async () => (await apiFetch<{ count: number }>("/orders/open-count")).count,
   });
 }
 
