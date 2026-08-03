@@ -1,5 +1,4 @@
-import { randomInt } from "node:crypto";
-import { conflictError, notFoundError, validationError } from "@rfitness/core";
+import { conflictError, evaluatePassword, notFoundError, validationError } from "@rfitness/core";
 import type { AccessRequestStatus } from "@prisma/client";
 import { prisma } from "../../db";
 import { getSupabaseAdmin } from "../../supabase/admin";
@@ -7,9 +6,10 @@ import { writeAuditLog } from "../../audit/audit-log";
 import type { AuthContext } from "../../auth/context";
 import { provisionGym, syncGymIdsMetadata } from "../identity/gym-provisioning";
 
-export interface AccessRequestInput {
+export interface SignUpInput {
   requesterName: string;
   requesterEmail: string;
+  password: string;
   phone?: string | null;
   gymName: string;
   notes?: string | null;
@@ -34,26 +34,14 @@ export interface ApprovalResult {
   gymId: string;
   gymName: string;
   email: string;
-  /**
-   * Senha provisória, mostrada **uma única vez** ao admin que aprovou, para ele
-   * repassar ao gestor. `null` quando a pessoa já tinha conta (ganhou só mais
-   * uma academia) e portanto continua com a senha dela.
-   */
-  temporaryPassword: string | null;
 }
 
-const PASSWORD_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
-const PASSWORD_SYMBOLS = "!@#$%&*?";
-
-/**
- * Senha provisória de 16 caracteres com `randomInt` (CSPRNG). `Math.random`
- * seria previsível, e essa senha é a credencial inicial de um tenant inteiro.
- * O alfabeto omite O/0 e I/l porque ela é lida e digitada por uma pessoa.
- */
-function generateTemporaryPassword(): string {
-  const pick = (source: string) => source[randomInt(source.length)]!;
-  const body = Array.from({ length: 14 }, () => pick(PASSWORD_ALPHABET)).join("");
-  return `${body}${pick(PASSWORD_SYMBOLS)}${randomInt(10)}`;
+/** Situação da conta de quem ainda não opera nenhuma academia. */
+export interface AccessStatusDto {
+  status: AccessRequestStatus;
+  gymName: string;
+  decisionReason: string | null;
+  createdAt: Date;
 }
 
 function toDto(request: {
@@ -102,32 +90,103 @@ const REQUEST_SELECT = {
 } as const;
 
 /**
- * Pedido de acesso do formulário público.
+ * Cadastro público de gestor.
  *
- * A resposta é sempre a mesma frase, com ou sem pedido pendente do mesmo
- * e-mail: dizer "já existe um pedido" transformaria o formulário aberto num
- * oráculo de quem está entrando na plataforma.
+ * Cria a conta de verdade, com a senha que a pessoa escolheu — ela já consegue
+ * entrar. O que fica pendente da RFitness é a academia: sem tenant, o painel não
+ * tem o que mostrar nem o que gravar, então a aprovação continua sendo a
+ * barreira real, sem depender de senha provisória repassada por fora.
+ *
+ * Aqui, ao contrário de um formulário anônimo, dizer "e-mail já cadastrado" é
+ * necessário: a pessoa precisa saber que deve fazer login em vez de tentar de
+ * novo.
  */
-export async function submitAccessRequest(input: AccessRequestInput): Promise<{ received: true }> {
+export async function signUp(input: SignUpInput): Promise<{ status: AccessRequestStatus }> {
   const email = input.requesterEmail.trim().toLowerCase();
+  const name = input.requesterName.trim();
+  const gymName = input.gymName.trim();
 
-  const pending = await prisma.accessRequest.findFirst({
-    where: { requesterEmail: email, status: "PENDING" },
-    select: { id: true },
+  // Mesma regra de força do resto do sistema: o medidor da tela é conveniência,
+  // não barreira — quem chama a API direto passa por aqui igual.
+  const strength = evaluatePassword(input.password, [name, email, gymName]);
+  if (!strength.acceptable) {
+    throw validationError(strength.hint ?? "Escolha uma senha mais forte.");
+  }
+
+  const existing = await prisma.accessRequest.findFirst({
+    where: { requesterEmail: email },
+    select: { status: true },
   });
-  if (pending) return { received: true };
+  if (existing) {
+    throw conflictError(
+      existing.status === "REJECTED"
+        ? "Este e-mail já teve um cadastro recusado. Fale com a administração da RFitness."
+        : "Este e-mail já está cadastrado. Faça login.",
+    );
+  }
 
-  await prisma.accessRequest.create({
-    data: {
-      requesterName: input.requesterName.trim(),
-      requesterEmail: email,
-      phone: input.phone?.trim() || null,
-      gymName: input.gymName.trim(),
-      notes: input.notes?.trim() || null,
-    },
+  const { data, error } = await getSupabaseAdmin().auth.admin.createUser({
+    email,
+    password: input.password,
+    email_confirm: true,
+    app_metadata: { gym_ids: [] },
+    user_metadata: { name },
   });
 
-  return { received: true };
+  if (error || !data.user) {
+    if (/already been registered|already exists/i.test(error?.message ?? "")) {
+      throw conflictError("Este e-mail já está cadastrado. Faça login.");
+    }
+    throw validationError(`Não foi possível criar a conta: ${error?.message}`);
+  }
+
+  try {
+    await prisma.accessRequest.create({
+      data: {
+        authUserId: data.user.id,
+        requesterName: name,
+        requesterEmail: email,
+        phone: input.phone?.trim() || null,
+        gymName,
+        notes: input.notes?.trim() || null,
+      },
+    });
+  } catch (dbError) {
+    // Sem o pedido, a conta viraria uma credencial válida que ninguém consegue
+    // aprovar — e o e-mail ficaria bloqueado para uma nova tentativa.
+    await getSupabaseAdmin()
+      .auth.admin.deleteUser(data.user.id)
+      .catch(() => undefined);
+    throw dbError;
+  }
+
+  return { status: "PENDING" };
+}
+
+/**
+ * Situação do cadastro de quem está sem academia. É o que permite à interface
+ * dizer "aguardando aprovação" em vez de mostrar um painel vazio.
+ */
+export async function getAccessStatus(authUserId: string): Promise<AccessStatusDto | null> {
+  const request = await prisma.accessRequest.findUnique({
+    where: { authUserId },
+    select: { status: true, gymName: true, decisionReason: true, createdAt: true },
+  });
+  return request;
+}
+
+/**
+ * Já pode operar? Vale para quem foi aprovado — e também para as contas
+ * criadas antes deste fluxo, que têm academia mas nunca tiveram pedido.
+ */
+export async function isApproved(authUserId: string): Promise<boolean> {
+  const [request, profile] = await Promise.all([
+    prisma.accessRequest.findUnique({ where: { authUserId }, select: { status: true } }),
+    prisma.user.findFirst({ where: { authUserId }, select: { id: true } }),
+  ]);
+
+  if (request) return request.status === "APPROVED";
+  return profile !== null;
 }
 
 export async function listAccessRequests(status?: AccessRequestStatus): Promise<AccessRequestDto[]> {
@@ -150,11 +209,10 @@ async function requireReviewer(auth: AuthContext): Promise<{ id: string; name: s
 }
 
 /**
- * Aprova o pedido: garante a conta do gestor no Supabase Auth e provisiona a
- * primeira academia dele.
+ * Aprova o cadastro: provisiona a academia pedida e a entrega ao gestor.
  *
- * Se o e-mail já for de um gestor da plataforma, nada de conta nova — ele só
- * ganha mais uma unidade na rede, com a senha que já usa.
+ * A conta já existe desde o cadastro, então não há senha para criar nem para
+ * repassar — no próximo carregamento a academia simplesmente aparece para ele.
  */
 export async function approveAccessRequest(
   auth: AuthContext,
@@ -164,60 +222,22 @@ export async function approveAccessRequest(
   const reviewer = await requireReviewer(auth);
 
   const request = await prisma.accessRequest.findUnique({ where: { id: requestId } });
-  if (!request) throw notFoundError("Pedido de acesso não encontrado.");
-  if (request.status !== "PENDING") throw conflictError("Este pedido já foi decidido.");
+  if (!request) throw notFoundError("Cadastro não encontrado.");
+  if (request.status !== "PENDING") throw conflictError("Este cadastro já foi decidido.");
+  if (!request.authUserId) {
+    throw validationError(
+      "Este cadastro é anterior ao fluxo atual e não tem conta associada. Peça para a pessoa se cadastrar de novo.",
+    );
+  }
 
-  // Um perfil existente é a prova de que a pessoa já tem conta no Auth — e o
-  // caminho para descobrir o authUserId dela sem varrer a lista do Supabase.
-  const existingProfile = await prisma.user.findFirst({
-    where: { email: request.requesterEmail },
-    select: { authUserId: true, name: true },
+  const gym = await provisionGym({
+    gymName: request.gymName,
+    ownerAuthUserId: request.authUserId,
+    ownerName: request.requesterName,
+    ownerEmail: request.requesterEmail,
   });
 
-  let authUserId = existingProfile?.authUserId ?? null;
-  let temporaryPassword: string | null = null;
-
-  if (!authUserId) {
-    temporaryPassword = generateTemporaryPassword();
-    const { data, error } = await getSupabaseAdmin().auth.admin.createUser({
-      email: request.requesterEmail,
-      password: temporaryPassword,
-      email_confirm: true,
-      app_metadata: { gym_ids: [] },
-      user_metadata: { name: request.requesterName },
-    });
-
-    if (error || !data.user) {
-      if (/already been registered|already exists/i.test(error?.message ?? "")) {
-        throw conflictError(
-          "Este e-mail já existe no Supabase Auth mas não tem perfil na plataforma. Resolva o conflito antes de aprovar.",
-        );
-      }
-      throw validationError(`Falha ao criar o acesso do gestor: ${error?.message}`);
-    }
-    authUserId = data.user.id;
-  }
-
-  let gym;
-  try {
-    gym = await provisionGym({
-      gymName: request.gymName,
-      ownerAuthUserId: authUserId,
-      ownerName: existingProfile?.name ?? request.requesterName,
-      ownerEmail: request.requesterEmail,
-    });
-  } catch (error) {
-    // Rollback só da conta que esta aprovação criou: apagar uma conta
-    // preexistente derrubaria o acesso do gestor às academias que ele já tem.
-    if (temporaryPassword) {
-      await getSupabaseAdmin()
-        .auth.admin.deleteUser(authUserId)
-        .catch(() => undefined);
-    }
-    throw error;
-  }
-
-  await syncGymIdsMetadata(authUserId);
+  await syncGymIdsMetadata(request.authUserId);
 
   await prisma.accessRequest.update({
     where: { id: requestId },
@@ -240,12 +260,7 @@ export async function approveAccessRequest(
     userAgent: meta.userAgent,
   });
 
-  return {
-    gymId: gym.id,
-    gymName: gym.name,
-    email: request.requesterEmail,
-    temporaryPassword,
-  };
+  return { gymId: gym.id, gymName: gym.name, email: request.requesterEmail };
 }
 
 export async function rejectAccessRequest(
@@ -259,8 +274,8 @@ export async function rejectAccessRequest(
     where: { id: requestId },
     select: { status: true },
   });
-  if (!request) throw notFoundError("Pedido de acesso não encontrado.");
-  if (request.status !== "PENDING") throw conflictError("Este pedido já foi decidido.");
+  if (!request) throw notFoundError("Cadastro não encontrado.");
+  if (request.status !== "PENDING") throw conflictError("Este cadastro já foi decidido.");
 
   const updated = await prisma.accessRequest.update({
     where: { id: requestId },

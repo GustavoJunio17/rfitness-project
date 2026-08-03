@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Building2, Check, Loader2, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { SkeletonList } from "@/components/ui/skeleton";
 import { useCreateGym, useMyGyms, useUpdateGym, type Gym } from "@/hooks/use-gyms";
 import { useSession, useSwitchGym } from "@/hooks/use-session";
+import AcademiasLoading from "./loading";
 
 function GymCard({ gym, isActive }: { gym: Gym; isActive: boolean }) {
   const router = useRouter();
@@ -164,10 +165,17 @@ function NewGymDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
  * A rede do gestor. É a tela de pouso de quem foi aprovado e ainda não escolheu
  * uma unidade — por isso ela precisa funcionar sem academia ativa.
  */
-export default function AcademiasPage() {
+function AcademiasContent() {
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const { data: gyms, isLoading } = useMyGyms();
   const [isFormOpen, setFormOpen] = useState(false);
+
+  // `?nova=1` vem do atalho "Nova academia" do seletor da topbar: abre o
+  // diálogo direto, sem obrigar a caçar o botão na página.
+  useEffect(() => {
+    if (searchParams.get("nova") === "1") setFormOpen(true);
+  }, [searchParams]);
 
   const activeGymId = session?.gym?.id ?? null;
 
@@ -211,5 +219,17 @@ export default function AcademiasPage() {
 
       <NewGymDialog open={isFormOpen} onOpenChange={setFormOpen} />
     </div>
+  );
+}
+
+/**
+ * `useSearchParams` exige um boundary de Suspense no App Router; por isso o
+ * conteúdo vive num componente separado.
+ */
+export default function AcademiasPage() {
+  return (
+    <Suspense fallback={<AcademiasLoading />}>
+      <AcademiasContent />
+    </Suspense>
   );
 }

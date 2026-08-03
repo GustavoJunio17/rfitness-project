@@ -24,7 +24,6 @@ export interface ApprovalResult {
   gymId: string;
   gymName: string;
   email: string;
-  temporaryPassword: string | null;
 }
 
 export interface PlatformGym {

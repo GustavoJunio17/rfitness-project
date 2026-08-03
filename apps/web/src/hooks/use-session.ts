@@ -10,6 +10,15 @@ export interface GymMembership {
   roles: string[];
 }
 
+export type AccessStatus = "PENDING" | "APPROVED" | "REJECTED";
+
+export interface AccessState {
+  status: AccessStatus;
+  gymName: string;
+  decisionReason: string | null;
+  createdAt: string;
+}
+
 export interface SessionUser {
   /** Perfil na academia ativa; `null` para admin de plataforma sem academia. */
   id: string | null;
@@ -19,6 +28,8 @@ export interface SessionUser {
   roles: string[];
   gym: { id: string; name: string; slug: string; whatsappInstanceName: string | null } | null;
   memberships: GymMembership[];
+  /** Situação do cadastro; só vem preenchida para quem está sem academia. */
+  access: AccessState | null;
 }
 
 /** Perfil, papéis e rede de academias do usuário logado, servidos por /api/auth/me. */

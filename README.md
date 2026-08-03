@@ -42,9 +42,10 @@ sempre vira 500 genérico — mensagem interna não vaza.
   academia e os papéis vêm do banco (`users` + `user_roles`) a cada request — um metadata
   copiado do JWT seria uma segunda fonte de verdade fadada a divergir da tabela de papéis.
   Nenhuma rota aceita `gymId` do cliente.
-- **Não existe auto-cadastro.** A RFitness engloba as academias e libera cada gestor à mão: o
-  formulário público (`/solicitar-acesso`) só abre uma `AccessRequest`; um `PlatformAdmin`
-  aprova e é aí que nascem a conta no Auth e a primeira academia.
+- **Cadastro cria a conta; a RFitness libera a academia.** Em `/cadastro` a pessoa escolhe a
+  própria senha e já entra — mas sem tenant não há o que operar, e o painel mostra "cadastro em
+  análise". Um `PlatformAdmin` aprova e é aí que a academia é provisionada. A barreira é a
+  mesma de antes, sem o vaivém de senha provisória repassada por fora.
 - **Um gestor, várias academias.** `users.authUserId` não é único — a pessoa tem um perfil por
   unidade, com papéis próprios em cada uma. A unidade ativa da sessão vem de um cookie que o
   servidor confronta com os vínculos reais, então trocar o cookie não troca de tenant.
@@ -146,7 +147,7 @@ dos sinais de tempo real.
 
 ### Não validado neste ambiente
 
-- Login, aprovação de pedido de acesso e RLS **contra um projeto Supabase real** (o smoke usa
+- Login, cadastro, aprovação e RLS **contra um projeto Supabase real** (o smoke usa
   Postgres cru, sem Auth/Realtime/Storage). O SQL da migration — inclusive `auth_gym_ids()`
   com claim ausente, vazio e malformado — foi exercitado no Postgres do compose.
 - Upload de foto no Supabase Storage.

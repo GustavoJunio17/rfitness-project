@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, Loader2, ShieldCheck, X } from "lucide-react";
+import { Check, Loader2, ShieldCheck, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,47 +37,27 @@ function formatDate(value: string): string {
 }
 
 /**
- * Credenciais recém-criadas.
- *
- * A senha provisória existe só nesta resposta — o servidor guarda o hash, não
- * ela. Por isso o bloco é insistente: se o admin fechar sem copiar, o único
- * caminho é o gestor pedir recuperação de senha.
+ * Confirmação da liberação. Não há credencial a repassar: a conta já existia
+ * desde o cadastro, com a senha da própria pessoa — o que a aprovação entregou
+ * foi a academia.
  */
 function ApprovalReceipt({ result, onDismiss }: { result: ApprovalResult; onDismiss: () => void }) {
-  const [copied, setCopied] = useState(false);
-
-  async function handleCopy() {
-    if (!result.temporaryPassword) return;
-    await navigator.clipboard.writeText(`${result.email} / ${result.temporaryPassword}`);
-    setCopied(true);
-  }
-
   return (
     <Card className="border-emerald-500/40 bg-emerald-500/5">
-      <CardContent className="space-y-3 p-5">
-        <div className="flex items-start justify-between gap-3">
+      <CardContent className="flex items-start justify-between gap-3 p-5">
+        <div className="flex items-start gap-3">
+          <Check className="mt-0.5 h-5 w-5 shrink-0 text-emerald-500" aria-hidden />
           <div>
             <p className="font-semibold">Acesso liberado — academia “{result.gymName}” criada.</p>
             <p className="text-sm text-muted-foreground">
-              Repasse estes dados ao gestor. A senha provisória não será mostrada de novo.
+              {result.email} já pode operar o painel. Nada precisa ser enviado por fora: a senha é a
+              que a pessoa escolheu no cadastro.
             </p>
           </div>
-          <Button variant="ghost" size="sm" onClick={onDismiss} aria-label="Fechar">
-            <X className="h-4 w-4" />
-          </Button>
         </div>
-
-        <div className="rounded-md border border-border bg-background p-3 font-mono text-sm">
-          <p>E-mail: {result.email}</p>
-          <p>Senha: {result.temporaryPassword ?? "(o gestor já tinha conta — senha inalterada)"}</p>
-        </div>
-
-        {result.temporaryPassword && (
-          <Button size="sm" variant="outline" onClick={handleCopy}>
-            {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-            {copied ? "Copiado" : "Copiar credenciais"}
-          </Button>
-        )}
+        <Button variant="ghost" size="sm" onClick={onDismiss} aria-label="Fechar">
+          <X className="h-4 w-4" />
+        </Button>
       </CardContent>
     </Card>
   );
@@ -204,7 +184,7 @@ export default function PlataformaPage() {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Pedidos pendentes</CardTitle>
+                <CardTitle>Cadastros pendentes</CardTitle>
               </CardHeader>
               <CardContent className="text-2xl font-bold">{overview.requests.pending}</CardContent>
             </Card>
@@ -227,7 +207,7 @@ export default function PlataformaPage() {
             </Card>
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>Pedidos decididos</CardTitle>
+                <CardTitle>Cadastros decididos</CardTitle>
               </CardHeader>
               <CardContent className="text-2xl font-bold">
                 {overview.requests.approved + overview.requests.rejected}
@@ -241,7 +221,7 @@ export default function PlataformaPage() {
 
       <section className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Pedidos de acesso</h2>
+          <h2 className="text-lg font-semibold">Cadastros de gestores</h2>
           <Select
             className="w-48"
             value={statusFilter}
@@ -275,7 +255,7 @@ export default function PlataformaPage() {
             ) : (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
-                  Nenhum pedido neste filtro.
+                  Nenhum cadastro neste filtro.
                 </TableCell>
               </TableRow>
             )}

@@ -1,17 +1,19 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { Building2, Check, ChevronDown, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Building2, Check, ChevronDown, Loader2, Plus, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession, useSwitchGym } from "@/hooks/use-session";
 
 /**
  * Seletor da academia ativa.
  *
- * Uma rede pode ter várias unidades, e o dashboard inteiro é escopado por uma
- * delas. Só aparece quando há mais de uma: com uma única academia o controle
- * seria um menu de um item só.
+ * O dashboard inteiro é escopado por uma unidade, então qual delas está em uso
+ * precisa estar sempre visível — inclusive com uma só. Escondê-lo nesse caso
+ * economizaria um clique e cobraria o preço de o gestor não ter onde confirmar
+ * em que unidade acabou de lançar uma venda.
  */
 export function GymSwitcher() {
   const router = useRouter();
@@ -20,21 +22,29 @@ export function GymSwitcher() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Clique fora fecha: sem isso o menu ficaria aberto atrás do conteúdo depois
-  // de o usuário desistir da troca.
+  // Clique fora e Esc fecham: sem isso o menu ficaria aberto sobre o conteúdo
+  // depois de o usuário desistir da troca.
   useEffect(() => {
     if (!open) return undefined;
     const onPointerDown = (event: PointerEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) setOpen(false);
     };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
     document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [open]);
 
   const memberships = session?.memberships ?? [];
-  if (memberships.length < 2) return null;
+  if (memberships.length === 0) return null;
 
   const activeGymId = session?.gym?.id ?? null;
+  const activeName = session?.gym?.name ?? "Selecionar academia";
 
   async function handleSelect(gymId: string) {
     setOpen(false);
@@ -53,40 +63,79 @@ export function GymSwitcher() {
         disabled={switchGym.isPending}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="flex items-center gap-2 rounded-md border border-border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-muted disabled:opacity-60"
+        className="flex h-10 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm transition-colors hover:bg-muted disabled:opacity-60"
       >
         {switchGym.isPending ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
         ) : (
-          <Building2 className="h-4 w-4 text-muted-foreground" aria-hidden />
+          <Building2 className="h-4 w-4 shrink-0 text-brand-red" aria-hidden />
         )}
-        <span className="max-w-[12rem] truncate">{session?.gym?.name ?? "Selecionar academia"}</span>
-        <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden />
+        <span className="flex flex-col items-start leading-tight">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Academia</span>
+          <span className="max-w-[11rem] truncate font-medium">{activeName}</span>
+        </span>
+        {memberships.length > 1 && (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+        )}
       </button>
 
       {open && (
-        <ul
-          role="listbox"
-          className="absolute right-0 z-50 mt-1 w-64 overflow-hidden rounded-md border border-border bg-popover shadow-lg"
-        >
-          {memberships.map((membership) => (
-            <li key={membership.gymId}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={membership.gymId === activeGymId}
-                onClick={() => handleSelect(membership.gymId)}
-                className={cn(
-                  "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted",
-                  membership.gymId === activeGymId && "font-medium text-brand-red",
-                )}
-              >
-                <span className="truncate">{membership.gymName}</span>
-                {membership.gymId === activeGymId && <Check className="h-4 w-4 shrink-0" aria-hidden />}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <div className="absolute right-0 z-50 mt-1 w-72 overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+          <p className="border-b border-border px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Suas academias
+          </p>
+
+          <ul role="listbox" className="max-h-72 overflow-y-auto py-1">
+            {memberships.map((membership) => {
+              const isActive = membership.gymId === activeGymId;
+              return (
+                <li key={membership.gymId}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={isActive}
+                    onClick={() => handleSelect(membership.gymId)}
+                    className={cn(
+                      "flex w-full items-start justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted",
+                      isActive && "bg-muted/60",
+                    )}
+                  >
+                    <span className="min-w-0">
+                      <span
+                        className={cn("block truncate", isActive && "font-medium text-brand-red")}
+                      >
+                        {membership.gymName}
+                      </span>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {membership.roles.join(" · ") || "sem papel definido"}
+                      </span>
+                    </span>
+                    {isActive && <Check className="mt-0.5 h-4 w-4 shrink-0 text-brand-red" aria-hidden />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="border-t border-border">
+            <Link
+              href="/dashboard/academias"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Settings2 className="h-4 w-4" aria-hidden />
+              Gerenciar academias
+            </Link>
+            <Link
+              href="/dashboard/academias?nova=1"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              Nova academia
+            </Link>
+          </div>
+        </div>
       )}
     </div>
   );

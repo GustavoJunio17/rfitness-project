@@ -53,9 +53,9 @@ export function LoginForm() {
       subtitle="Acesse o painel da sua academia."
       footer={
         <>
-          Ainda não tem acesso?{" "}
-          <Link href="/solicitar-acesso" className="font-medium text-white hover:text-brand-400">
-            Solicitar à RFitness
+          Ainda não tem conta?{" "}
+          <Link href="/cadastro" className="font-medium text-white hover:text-brand-400">
+            Criar conta
           </Link>
         </>
       }

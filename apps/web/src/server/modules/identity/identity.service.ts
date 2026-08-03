@@ -12,6 +12,7 @@ import { getEnv } from "../../env";
 import { getSupabaseAdmin } from "../../supabase/admin";
 import { writeAuditLog } from "../../audit/audit-log";
 import type { AuthContext, GymMembership } from "../../auth/context";
+import { getAccessStatus, isApproved, type AccessStatusDto } from "../platform/platform.service";
 import { provisionGym, syncGymIdsMetadata } from "./gym-provisioning";
 
 export interface GymSummary {
@@ -34,6 +35,12 @@ export interface CurrentUserDto {
   roles: Role[];
   gym: { id: string; name: string; slug: string; whatsappInstanceName: string | null } | null;
   memberships: GymMembership[];
+  /**
+   * Situação do cadastro. Só é consultada para quem está sem academia — é a
+   * diferença entre "aguardando a RFitness" e "painel realmente vazio", e sem
+   * ela a interface não teria como explicar por que não há nada para operar.
+   */
+  access: AccessStatusDto | null;
 }
 
 /** Perfil da sessão atual, com a rede de academias e a unidade ativa. */
@@ -46,7 +53,8 @@ export async function getCurrentUser(auth: AuthContext): Promise<CurrentUserDto>
   };
 
   if (!auth.gymId) {
-    return { ...base, id: null, roles: [], gym: null };
+    const access = auth.isPlatformAdmin ? null : await getAccessStatus(auth.authUserId);
+    return { ...base, id: null, roles: [], gym: null, access };
   }
 
   const gym = await prisma.gym.findUnique({
@@ -68,7 +76,7 @@ export async function getCurrentUser(auth: AuthContext): Promise<CurrentUserDto>
     select: { id: true },
   });
 
-  return { ...base, id: user?.id ?? null, roles: auth.roles, gym };
+  return { ...base, id: user?.id ?? null, roles: auth.roles, gym, access: null };
 }
 
 /**
@@ -134,6 +142,12 @@ export async function createGym(
   input: { name: string },
   meta: { ip: string | null; userAgent: string | null },
 ): Promise<GymSummary> {
+  // Cadastro pendente não abre academia por conta própria: seria contornar a
+  // aprovação da RFitness pela porta dos fundos.
+  if (!(await isApproved(auth.authUserId))) {
+    throw forbiddenError("Seu cadastro ainda não foi liberado pela administração da RFitness.");
+  }
+
   const name = input.name.trim();
 
   const duplicate = await prisma.gym.findFirst({

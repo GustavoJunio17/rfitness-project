@@ -33,11 +33,12 @@ const positiveInt = z.number().int().positive();
 // O slug da academia não entra aqui de propósito: é interno e derivado do nome
 // no servidor, para o cliente não escolher nem descobrir o identificador.
 //
-// Também não há schema de auto-cadastro: ninguém cria a própria conta. O
-// formulário público só abre um pedido, que a administração da RFitness aprova.
-export const accessRequestSchema = z.object({
+// O cadastro cria a conta com a senha da própria pessoa; o que fica pendente da
+// RFitness é a academia.
+export const signUpSchema = z.object({
   requesterName: z.string().trim().min(2).max(120),
   requesterEmail: z.string().trim().email(),
+  password: z.string().min(PASSWORD_MIN_LENGTH, "A senha deve ter no mínimo 8 caracteres.").max(72),
   phone: z.string().trim().max(20).optional().nullable(),
   gymName: z.string().trim().min(2).max(120),
   notes: z.string().trim().max(1000).optional().nullable(),

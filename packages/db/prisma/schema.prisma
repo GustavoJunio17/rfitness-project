@@ -56,12 +56,18 @@ enum AccessRequestStatus {
   REJECTED
 }
 
-/// Pedido de acesso à plataforma, aberto pelo formulário público.
+/// Cadastro de gestor aguardando liberação da RFitness.
 ///
-/// Guardar o pedido em vez de criar a conta na hora é o que torna o cadastro
-/// controlado: nada existe no Auth até um admin de plataforma aprovar.
+/// A conta no Supabase Auth já existe (a pessoa escolheu a própria senha no
+/// cadastro) — o que não existe até a aprovação é a academia. Enquanto o status
+/// for PENDING a pessoa loga, mas não tem tenant nenhum, então não há o que
+/// operar: o acesso é controlado sem passar por senha provisória.
 model AccessRequest {
-  id             String              @id @default(uuid())
+  id String @id @default(uuid())
+
+  /// Conta criada no cadastro (`auth.users`). Único: uma conta, um pedido.
+  authUserId String? @unique
+
   requesterName  String
   requesterEmail String
   phone          String?

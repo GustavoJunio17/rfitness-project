@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SkeletonChart, SkeletonStatCards } from "@/components/ui/skeleton";
 import { useFinanceSummary, useRevenueSeries } from "@/hooks/use-finance";
 import { useOpenOrdersCount } from "@/hooks/use-orders";
+import { useSession } from "@/hooks/use-session";
+import { AccountStatusPanel } from "@/components/account/account-status-panel";
 import { ApiError } from "@/lib/api-client";
 
 function currency(value: number) {
@@ -17,9 +19,16 @@ const FUTURE_PHASE_CARDS = [
 ];
 
 export default function DashboardPage() {
+  const { data: session, isPending: isSessionPending } = useSession();
   const { data: summary, error: summaryError, isPending: isSummaryPending } = useFinanceSummary();
   const { data: series, isPending: isSeriesPending } = useRevenueSeries(30);
   const { data: openOrdersCount } = useOpenOrdersCount();
+
+  // Sem academia ativa não há indicador nenhum a montar: a tela explica o
+  // motivo (cadastro em análise, recusado, ou nenhuma unidade escolhida).
+  if (!isSessionPending && !session?.gym) {
+    return <AccountStatusPanel />;
+  }
 
   if (summaryError instanceof ApiError && summaryError.status === 403) {
     return (
