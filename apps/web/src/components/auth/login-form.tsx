@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { apiFetch } from "@/lib/api-client";
@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function LoginForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -64,8 +63,14 @@ export function LoginForm() {
     }
 
     const redirect = searchParams.get("redirect");
-    router.replace(redirect && redirect.startsWith("/dashboard") ? redirect : "/dashboard");
-    router.refresh();
+    const target = redirect && redirect.startsWith("/dashboard") ? redirect : "/dashboard";
+
+    // Navegação completa, não `router.replace`. O App Router guarda em cache o
+    // payload das rotas já visitadas, e ele não pertence a uma sessão — trocar
+    // de conta na mesma aba servia a shell renderizada para quem estava logado
+    // antes, com o menu e o painel do usuário errado. Descartar tudo é a única
+    // forma de garantir que nada do login anterior sobreviva.
+    window.location.assign(target);
   }
 
   return (

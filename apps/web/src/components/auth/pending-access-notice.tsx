@@ -28,8 +28,9 @@ export function PendingAccessNotice({
   async function handleSignOut() {
     setSigningOut(true);
     await getSupabaseBrowserClient().auth.signOut();
-    router.replace("/login");
-    router.refresh();
+    // Navegação completa para descartar o cache de rotas do App Router junto
+    // com a sessão — ver `topbar.tsx`.
+    window.location.assign("/login");
   }
 
   // Recusado e suspenso dizem a mesma coisa para quem está do lado de fora:

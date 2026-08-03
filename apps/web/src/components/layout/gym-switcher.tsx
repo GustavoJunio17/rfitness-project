@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Building2, Check, ChevronDown, Loader2, Plus, Settings2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession, useSwitchGym } from "@/hooks/use-session";
@@ -16,7 +15,6 @@ import { useSession, useSwitchGym } from "@/hooks/use-session";
  * em que unidade acabou de lançar uma venda.
  */
 export function GymSwitcher() {
-  const router = useRouter();
   const { data: session } = useSession();
   const switchGym = useSwitchGym();
   const [open, setOpen] = useState(false);
@@ -50,9 +48,12 @@ export function GymSwitcher() {
     setOpen(false);
     if (gymId === activeGymId) return;
     await switchGym.mutateAsync(gymId);
-    // `refresh` além do cache limpo: o shell do dashboard é Server Component e
-    // lê a academia ativa no servidor.
-    router.refresh();
+
+    // Recarga completa. `router.refresh()` revalidaria só a rota atual, e o
+    // cache do App Router guardaria as outras telas ainda montadas para a
+    // academia anterior — o gestor veria o nome de uma unidade e os números de
+    // outra ao navegar.
+    window.location.reload();
   }
 
   return (

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,16 +9,16 @@ import { NotificationBell } from "./notification-bell";
 import { GymSwitcher } from "./gym-switcher";
 
 export function Topbar({ userName, userEmail }: { userName: string; userEmail: string }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   async function handleLogout() {
     setLoading(true);
-    // signOut limpa os cookies de sessão; o refresh força o servidor a
-    // reavaliar e redirecionar.
     await getSupabaseBrowserClient().auth.signOut();
-    router.replace("/login");
-    router.refresh();
+
+    // Navegação completa: `signOut` limpa os cookies, mas não o cache de rotas
+    // do App Router. Sem descartá-lo, a próxima conta a entrar nesta aba
+    // reencontraria as telas renderizadas para esta.
+    window.location.assign("/login");
   }
 
   return (

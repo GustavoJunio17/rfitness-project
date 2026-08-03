@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Building2, Check, Loader2, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import { useSession, useSwitchGym } from "@/hooks/use-session";
 import AcademiasLoading from "./loading";
 
 function GymCard({ gym, isActive }: { gym: Gym; isActive: boolean }) {
-  const router = useRouter();
   const switchGym = useSwitchGym();
   const updateGym = useUpdateGym();
   const [renaming, setRenaming] = useState(false);
@@ -23,8 +22,9 @@ function GymCard({ gym, isActive }: { gym: Gym; isActive: boolean }) {
 
   async function handleActivate() {
     await switchGym.mutateAsync(gym.id);
-    router.push("/dashboard");
-    router.refresh();
+    // Navegação completa: a academia ativa muda a shell inteira, e o cache de
+    // rotas do App Router não sabe disso — ver `gym-switcher.tsx`.
+    window.location.assign("/dashboard");
   }
 
   async function handleRename(event: FormEvent) {
