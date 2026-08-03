@@ -12,11 +12,19 @@ import {
 
 export { ACTIVE_GYM_COOKIE, type GymMembership };
 
+export type AccessStatus = "APPROVED" | "PENDING" | "REJECTED";
+
 export interface AuthContext {
   /** id em `auth.users` (Supabase Auth). */
   authUserId: string;
   email: string;
   name: string;
+
+  /**
+   * Liberação da conta pela RFitness. Enquanto não for `APPROVED` a sessão é
+   * válida — a pessoa realmente se cadastrou — mas não dá acesso a nada.
+   */
+  accessStatus: AccessStatus;
 
   /** Admin da RFitness: administra a plataforma, não opera academia nenhuma. */
   isPlatformAdmin: boolean;
@@ -56,6 +64,24 @@ async function loadMemberships(authUserId: string): Promise<GymMembership[]> {
   }));
 }
 
+/**
+ * Liberação da conta.
+ *
+ * Quem já tem perfil em alguma academia está liberado por definição — inclusive
+ * as contas anteriores a este fluxo, que nunca passaram por um cadastro. A
+ * consulta ao cadastro só acontece para quem não tem vínculo nenhum, que é
+ * exatamente o caso pendente.
+ */
+async function loadAccessStatus(authUserId: string, hasMembership: boolean): Promise<AccessStatus> {
+  if (hasMembership) return "APPROVED";
+
+  const request = await prisma.accessRequest.findUnique({
+    where: { authUserId },
+    select: { status: true },
+  });
+  return request?.status ?? "APPROVED";
+}
+
 /** Contexto da request atual, ou null se não houver sessão válida. */
 export async function getAuthContext(): Promise<AuthContext | null> {
   const supabase = await createSupabaseServerClient();
@@ -76,8 +102,15 @@ export async function getAuthContext(): Promise<AuthContext | null> {
 
   const active = pickActiveGym(memberships, cookieStore.get(ACTIVE_GYM_COOKIE)?.value ?? null);
 
+  // Admin de plataforma não passa por liberação: quem libera é ele.
+  const accessStatus =
+    platformAdmin !== null
+      ? "APPROVED"
+      : await loadAccessStatus(identity.authUserId, memberships.length > 0);
+
   return {
     ...identity,
+    accessStatus,
     isPlatformAdmin: platformAdmin !== null,
     memberships,
     gymId: active?.gymId ?? "",

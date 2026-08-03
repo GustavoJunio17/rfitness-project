@@ -1,15 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, Clock, ShieldCheck, XCircle, type LucideIcon } from "lucide-react";
+import { Building2, ShieldCheck, type LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { SkeletonStatCards } from "@/components/ui/skeleton";
 import { useSession } from "@/hooks/use-session";
 import { cn } from "@/lib/utils";
 
 const TONES = {
-  wait: { card: "border-amber-500/40 bg-amber-500/5", icon: "text-amber-500" },
-  error: { card: "border-brand-red/40 bg-brand-red/5", icon: "text-brand-red" },
   neutral: { card: "border-border", icon: "text-muted-foreground" },
 } as const;
 
@@ -79,36 +77,12 @@ export function AccountStatusPanel() {
     );
   }
 
-  if (session.access?.status === "PENDING") {
-    return (
-      <StatePanel icon={Clock} tone="wait" title="Acesso em análise">
-        <p>
-          Sua conta foi criada, mas ainda precisa ser liberada pela administração da RFitness. Até
-          lá não é possível cadastrar academias nem operar o painel.
-        </p>
-        <p>
-          Assim que for liberado, basta recarregar esta página — nada precisa ser refeito nem
-          cadastrado de novo.
-        </p>
-      </StatePanel>
-    );
-  }
-
-  if (session.access?.status === "REJECTED") {
-    return (
-      <StatePanel icon={XCircle} tone="error" title="Acesso não liberado">
-        <p>A administração da RFitness não liberou o acesso para esta conta.</p>
-        {session.access.decisionReason && (
-          <p className="rounded-md border border-border bg-background p-3 text-left text-foreground">
-            {session.access.decisionReason}
-          </p>
-        )}
-      </StatePanel>
-    );
-  }
-
-  // Liberado e ainda sem unidade: é o estado logo após a aprovação, então a
-  // tela convida a criar em vez de só informar que não há nada.
+  // Conta não liberada não chega aqui: o layout do painel a manda para
+  // /acesso-pendente antes de renderizar qualquer coisa. Sobram os dois casos
+  // de quem está liberado e sem unidade ativa.
+  //
+  // Sem nenhuma academia é o estado logo após a liberação, então a tela convida
+  // a criar em vez de só informar que não há nada.
   const firstTime = session.memberships.length === 0;
 
   return (

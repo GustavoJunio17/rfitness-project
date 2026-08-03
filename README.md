@@ -42,10 +42,10 @@ sempre vira 500 genérico — mensagem interna não vaza.
   academia e os papéis vêm do banco (`users` + `user_roles`) a cada request — um metadata
   copiado do JWT seria uma segunda fonte de verdade fadada a divergir da tabela de papéis.
   Nenhuma rota aceita `gymId` do cliente.
-- **Cadastro cria a conta; a RFitness libera a academia.** Em `/cadastro` a pessoa escolhe a
-  própria senha e já entra — mas sem tenant não há o que operar, e o painel mostra "cadastro em
-  análise". Um `PlatformAdmin` aprova e é aí que a academia é provisionada. A barreira é a
-  mesma de antes, sem o vaivém de senha provisória repassada por fora.
+- **Cadastro cria a conta; a RFitness libera o acesso.** `/cadastro` pede nome, e-mail e senha
+  — só isso. A conta nasce travada: até um `PlatformAdmin` liberar, o login é recusado com o
+  aviso na própria tela e o painel nem chega a renderizar (`/acesso-pendente`). Depois de
+  liberado, quem cadastra as academias, e quantas, é o próprio gestor.
 - **Um gestor, várias academias.** `users.authUserId` não é único — a pessoa tem um perfil por
   unidade, com papéis próprios em cada uma. A unidade ativa da sessão vem de um cookie que o
   servidor confronta com os vínculos reais, então trocar o cookie não troca de tenant.

@@ -8,5 +8,6 @@ export const dynamic = "force-dynamic";
 
 export default async function RootPage() {
   const auth = await getAuthContext();
-  redirect(auth ? "/dashboard" : "/login");
+  if (!auth) redirect("/login");
+  redirect(auth.accessStatus === "APPROVED" ? "/dashboard" : "/acesso-pendente");
 }

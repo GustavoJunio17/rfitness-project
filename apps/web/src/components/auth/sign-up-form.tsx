@@ -2,11 +2,9 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Clock, Loader2, X } from "lucide-react";
 import { evaluatePassword } from "@rfitness/core";
 import { ApiError, apiFetch } from "@/lib/api-client";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { AuthError, AuthShell } from "@/components/auth/auth-shell";
 import { PasswordInput } from "@/components/auth/password-input";
 import { PasswordStrengthMeter } from "@/components/auth/password-strength-meter";
@@ -34,7 +32,6 @@ function formatErrorReference(error: ApiError): string | null {
  * conta: sem ela, não há como criar academia nenhuma, e portanto nada a operar.
  */
 export function SignUpForm() {
-  const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,6 +39,7 @@ export function SignUpForm() {
   const [error, setError] = useState<string | null>(null);
   const [errorReference, setErrorReference] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
 
   // Reavaliada a cada tecla; nome e e-mail entram como contexto para reprovar
   // senha derivada dos próprios dados do cadastro.
@@ -73,25 +71,40 @@ export function SignUpForm() {
         body: JSON.stringify({ requesterName: name, requesterEmail: email, password }),
       });
 
-      // Login logo em seguida: a conta existe de verdade, então a pessoa entra e
-      // acompanha o próprio cadastro em vez de ficar numa tela sem saída.
-      const { error: authError } = await getSupabaseBrowserClient().auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
-      });
-      if (authError) {
-        router.replace("/login");
-        return;
-      }
-
-      router.replace("/dashboard");
-      router.refresh();
+      // Sem login automático: a conta nasce travada, então entrar levaria direto
+      // ao aviso de acesso pendente. Melhor dizer isso aqui, sem o vaivém.
+      setDone(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Não foi possível concluir o cadastro.");
       setErrorReference(err instanceof ApiError ? formatErrorReference(err) : null);
     } finally {
       setLoading(false);
     }
+  }
+
+  if (done) {
+    return (
+      <AuthShell
+        title="Conta criada"
+        subtitle="Falta a liberação da administração da RFitness."
+        footer={
+          <Link href="/login" className="font-medium text-white hover:text-brand-400">
+            Voltar para o login
+          </Link>
+        }
+      >
+        <div className="flex flex-col items-center gap-3 py-2 text-center">
+          <Clock className="h-10 w-10 text-amber-500" aria-hidden />
+          <p className="text-sm text-muted-foreground">
+            Sua conta <span className="font-medium text-foreground">{email}</span> foi criada, mas o
+            acesso ao painel só é liberado depois que a administração da RFitness aprovar.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Você recebe um aviso assim que isso acontecer. Até lá, o login fica bloqueado.
+          </p>
+        </div>
+      </AuthShell>
+    );
   }
 
   return (

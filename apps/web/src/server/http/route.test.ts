@@ -9,6 +9,7 @@ const adminAuth: AuthContext = {
   gymId: "gym-1",
   email: "admin@demo.com",
   name: "Admin",
+  accessStatus: "APPROVED",
   isPlatformAdmin: false,
   memberships: [{ gymId: "gym-1", gymName: "Academia 1", gymSlug: "academia-1", roles: ["ADMIN"] }],
   roles: ["ADMIN"],
@@ -20,6 +21,9 @@ const stockistAuth: AuthContext = { ...adminAuth, roles: ["STOCKIST"] };
 const noGymAuth: AuthContext = { ...adminAuth, gymId: "", memberships: [], roles: [] };
 
 const platformAuth: AuthContext = { ...noGymAuth, isPlatformAdmin: true };
+
+/** Cadastrou-se, ainda não foi liberado pela RFitness. */
+const pendingAuth: AuthContext = { ...noGymAuth, accessStatus: "PENDING" };
 
 const request = (url = "https://app.test/api/x", init?: RequestInit) => new Request(url, init);
 
@@ -82,6 +86,25 @@ describe("defineRoute — escopo", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ memberships: 0 });
+  });
+
+  it("conta não liberada é recusada com código próprio", async () => {
+    const handler = defineRoute({ handler: async () => ({ ok: true }) }, deps(pendingAuth));
+    const response = await handler(request());
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe("ACCOUNT_NOT_APPROVED");
+  });
+
+  it("conta não liberada ainda enxerga o próprio estado (escopo `any`)", async () => {
+    const handler = defineRoute(
+      { scope: "any", handler: async ({ auth }) => ({ status: auth.accessStatus }) },
+      deps(pendingAuth),
+    );
+    const response = await handler(request());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ status: "PENDING" });
   });
 
   it("rota de plataforma recusa gestor de academia", async () => {

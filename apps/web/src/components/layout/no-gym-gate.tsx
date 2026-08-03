@@ -30,13 +30,9 @@ export function NoGymGate() {
     if (pathname === "/dashboard") return;
     if (GYM_FREE_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return;
 
-    if (session.isPlatformAdmin) {
-      router.replace("/dashboard/plataforma");
-      return;
-    }
-    // Cadastro ainda não liberado: não adianta mandar para "minhas academias",
-    // onde ele não pode criar nada.
-    router.replace(session.access?.status === "APPROVED" ? "/dashboard/academias" : "/dashboard");
+    // Conta não liberada nem chega ao painel — o layout a redireciona antes —,
+    // então quem cai aqui pode mesmo cadastrar uma academia.
+    router.replace(session.isPlatformAdmin ? "/dashboard/plataforma" : "/dashboard/academias");
   }, [isSuccess, session, pathname, router]);
 
   return null;

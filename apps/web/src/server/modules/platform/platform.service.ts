@@ -159,19 +159,6 @@ export async function getAccessStatus(authUserId: string): Promise<AccessStatusD
   });
 }
 
-/**
- * Já pode operar? Vale para quem foi aprovado — e também para as contas
- * criadas antes deste fluxo, que têm academia mas nunca tiveram pedido.
- */
-export async function isApproved(authUserId: string): Promise<boolean> {
-  const [request, profile] = await Promise.all([
-    prisma.accessRequest.findUnique({ where: { authUserId }, select: { status: true } }),
-    prisma.user.findFirst({ where: { authUserId }, select: { id: true } }),
-  ]);
-
-  if (request) return request.status === "APPROVED";
-  return profile !== null;
-}
 
 export async function listAccessRequests(status?: AccessRequestStatus): Promise<AccessRequestDto[]> {
   const requests = await prisma.accessRequest.findMany({

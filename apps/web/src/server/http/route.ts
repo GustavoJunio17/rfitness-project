@@ -151,6 +151,17 @@ export function defineRoute<TBody = undefined, TQuery = undefined, TParams = und
         }
         const scope = spec.scope ?? "gym";
 
+        // Conta não liberada não opera nada. `any` continua passando porque é
+        // por onde o cliente descobre o próprio estado (`/auth/me`) e por onde
+        // ele troca a senha — negar aí deixaria a pessoa sem explicação.
+        if (scope !== "any" && auth.accessStatus !== "APPROVED") {
+          return errorResponse(
+            403,
+            "ACCOUNT_NOT_APPROVED",
+            "Sua conta ainda precisa ser liberada pela administração da RFitness.",
+          );
+        }
+
         if (scope === "platform" && !auth.isPlatformAdmin) {
           return errorResponse(403, "FORBIDDEN", "Área restrita à administração da RFitness.");
         }

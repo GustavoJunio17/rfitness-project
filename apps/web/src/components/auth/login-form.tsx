@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { apiFetch } from "@/lib/api-client";
 import { AuthError, AuthShell } from "@/components/auth/auth-shell";
 import { PasswordInput } from "@/components/auth/password-input";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,26 @@ export function LoginForm() {
       );
       setLoading(false);
       return;
+    }
+
+    // Credencial certa não é o bastante: a conta ainda precisa estar liberada.
+    // Sem esta checagem a pessoa entraria e só descobriria o bloqueio depois,
+    // dentro do painel. A sessão é encerrada para não deixar meia-entrada.
+    try {
+      const session = await apiFetch<{ access: { status: string } | null }>("/auth/me");
+      if (session.access && session.access.status !== "APPROVED") {
+        await supabase.auth.signOut();
+        setError(
+          session.access.status === "REJECTED"
+            ? "A administração da RFitness não liberou o acesso desta conta."
+            : "Sua conta ainda precisa ser liberada pela administração da RFitness. Você recebe um aviso assim que isso acontecer.",
+        );
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // Falha ao consultar o perfil não deve barrar quem tem credencial válida:
+      // o servidor recusa de novo em cada rota, e o layout do painel também.
     }
 
     const redirect = searchParams.get("redirect");

@@ -12,7 +12,7 @@ import { getEnv } from "../../env";
 import { getSupabaseAdmin } from "../../supabase/admin";
 import { writeAuditLog } from "../../audit/audit-log";
 import type { AuthContext, GymMembership } from "../../auth/context";
-import { getAccessStatus, isApproved, type AccessStatusDto } from "../platform/platform.service";
+import { getAccessStatus, type AccessStatusDto } from "../platform/platform.service";
 import { provisionGym, syncGymIdsMetadata } from "./gym-provisioning";
 
 export interface GymSummary {
@@ -142,10 +142,11 @@ export async function createGym(
   input: { name: string },
   meta: { ip: string | null; userAgent: string | null },
 ): Promise<GymSummary> {
-  // Cadastro pendente não abre academia por conta própria: seria contornar a
-  // aprovação da RFitness pela porta dos fundos.
-  if (!(await isApproved(auth.authUserId))) {
-    throw forbiddenError("Seu cadastro ainda não foi liberado pela administração da RFitness.");
+  // Segunda checagem, além da de `defineRoute`: a rota é de escopo `any` (quem
+  // ainda não tem academia precisa alcançá-la), então é aqui que a liberação
+  // vira barreira para a criação em si.
+  if (auth.accessStatus !== "APPROVED") {
+    throw forbiddenError("Sua conta ainda não foi liberada pela administração da RFitness.");
   }
 
   const name = input.name.trim();

@@ -17,6 +17,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const auth = await getAuthContext();
   if (!auth) redirect("/login?redirect=/dashboard");
 
+  // Conta não liberada não vê o shell autenticado. Descobrir o bloqueio só ao
+  // clicar em algo dentro do painel seria pior do que não entrar.
+  if (auth.accessStatus !== "APPROVED") redirect("/acesso-pendente");
+
   return (
     <div className="flex min-h-screen">
       <RealtimeBridge />
