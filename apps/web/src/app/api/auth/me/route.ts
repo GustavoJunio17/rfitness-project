@@ -7,5 +7,5 @@ import { getCurrentUser } from "@/server/modules/identity/identity.service";
  */
 export const GET = defineRoute({
   scope: "any",
-  handler: async ({ auth }) => getCurrentUser(auth),
+  handler: async ({ auth }) => getCurrentUser(auth, { touch: true }),
 });

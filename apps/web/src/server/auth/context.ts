@@ -51,8 +51,9 @@ async function loadMemberships(authUserId: string): Promise<GymMembership[]> {
   const profiles = await prisma.user.findMany({
     where: { authUserId, status: "ACTIVE", gym: { isActive: true } },
     select: {
+      id: true,
       gymId: true,
-      gym: { select: { name: true, slug: true } },
+      gym: { select: { name: true, slug: true, whatsappInstanceName: true } },
       roles: { select: { role: { select: { name: true } } } },
     },
     orderBy: { gym: { name: "asc" } },
@@ -62,6 +63,8 @@ async function loadMemberships(authUserId: string): Promise<GymMembership[]> {
     gymId: profile.gymId,
     gymName: profile.gym.name,
     gymSlug: profile.gym.slug,
+    whatsappInstanceName: profile.gym.whatsappInstanceName,
+    userId: profile.id,
     roles: normalizeRoles(profile.roles.map((link) => link.role.name)),
   }));
 }
@@ -79,10 +82,15 @@ async function loadMemberships(authUserId: string): Promise<GymMembership[]> {
  */
 export const getAuthContext = cache(async function getAuthContext(): Promise<AuthContext | null> {
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.auth.getUser();
-  if (error) return null;
 
-  const identity = identityFromUser(data.user);
+  // `getClaims` verifica a assinatura do JWT localmente (com o JWKS do projeto,
+  // buscado uma vez e mantido em cache) em vez de perguntar ao servidor de Auth
+  // a cada request. `getUser` custava uma ida à rede por chamada — e ele é
+  // chamado no layout, na página e em toda rota de API.
+  const { data, error } = await supabase.auth.getClaims();
+  if (error || !data) return null;
+
+  const identity = identityFromUser(data.claims);
   if (!identity) return null;
 
   const [memberships, platformAdmin, account, cookieStore] = await Promise.all([

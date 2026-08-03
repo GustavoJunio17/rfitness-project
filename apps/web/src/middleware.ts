@@ -36,9 +36,10 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verificação local da assinatura do JWT; a renovação do token expirado
+  // continua acontecendo por baixo, e é ela que precisa dos cookies acima.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims ?? null;
 
   const { pathname } = request.nextUrl;
 

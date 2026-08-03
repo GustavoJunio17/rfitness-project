@@ -13,6 +13,8 @@ const membership = (gymId: string, roles: string[] = ["ADMIN"]): GymMembership =
   gymId,
   gymName: `Academia ${gymId}`,
   gymSlug: gymId,
+  userId: `user-${gymId}`,
+  whatsappInstanceName: null,
   roles: normalizeRoles(roles),
 });
 

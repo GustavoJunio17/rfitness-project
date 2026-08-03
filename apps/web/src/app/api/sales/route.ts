@@ -2,7 +2,7 @@ import { z } from "zod";
 import { defineRoute } from "@/server/http/route";
 import { createSaleSchema, limitQuery } from "@/server/http/schemas";
 import { salesService } from "@/server/modules/sales/sales.repository";
-import { resolveUserId } from "@/server/modules/identity/identity.service";
+import { currentProfileId } from "@/server/modules/identity/identity.service";
 
 export const GET = defineRoute({
   query: z.object({
@@ -24,5 +24,5 @@ export const POST = defineRoute({
   roles: ["ADMIN", "RECEPTION"],
   body: createSaleSchema,
   handler: async ({ auth, body }) =>
-    salesService.createSale(auth.gymId, await resolveUserId(auth.authUserId, auth.gymId), body),
+    salesService.createSale(auth.gymId, currentProfileId(auth), body),
 });

@@ -1,7 +1,7 @@
 import { defineRoute } from "@/server/http/route";
 import { updateOrderStatusSchema, uuidParam } from "@/server/http/schemas";
 import { ordersService } from "@/server/modules/orders/orders.repository";
-import { resolveUserId } from "@/server/modules/identity/identity.service";
+import { currentProfileId } from "@/server/modules/identity/identity.service";
 
 export const PATCH = defineRoute({
   roles: ["ADMIN", "RECEPTION", "STOCKIST"],
@@ -12,6 +12,6 @@ export const PATCH = defineRoute({
       auth.gymId,
       params.id,
       body.status,
-      await resolveUserId(auth.authUserId, auth.gymId),
+      currentProfileId(auth),
     ),
 });

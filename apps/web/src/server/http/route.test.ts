@@ -11,7 +11,16 @@ const adminAuth: AuthContext = {
   name: "Admin",
   accessStatus: "ACTIVE",
   isPlatformAdmin: false,
-  memberships: [{ gymId: "gym-1", gymName: "Academia 1", gymSlug: "academia-1", roles: ["ADMIN"] }],
+  memberships: [
+    {
+      gymId: "gym-1",
+      gymName: "Academia 1",
+      gymSlug: "academia-1",
+      userId: "user-1",
+      whatsappInstanceName: null,
+      roles: ["ADMIN"],
+    },
+  ],
   roles: ["ADMIN"],
 };
 

@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
+import { useInitialSession } from "@/providers/session-provider";
 
 export interface GymMembership {
   gymId: string;
@@ -10,11 +11,11 @@ export interface GymMembership {
   roles: string[];
 }
 
-export type AccessStatus = "PENDING" | "APPROVED" | "REJECTED";
+/** Espelha `ManagerAccountStatus`; só `ACTIVE` abre o painel. */
+export type AccessStatus = "PENDING" | "ACTIVE" | "REJECTED" | "SUSPENDED";
 
 export interface AccessState {
   status: AccessStatus;
-  gymName: string;
   decisionReason: string | null;
   createdAt: string;
 }
@@ -32,13 +33,22 @@ export interface SessionUser {
   access: AccessState | null;
 }
 
-/** Perfil, papéis e rede de academias do usuário logado, servidos por /api/auth/me. */
+/**
+ * Perfil, papéis e rede de academias do usuário logado.
+ *
+ * Dentro do dashboard o valor inicial vem do servidor (o layout já resolveu a
+ * sessão para decidir se renderiza), então não há estado vazio na primeira
+ * pintura nem uma chamada a `/auth/me` só para descobrir quem é quem.
+ */
 export function useSession() {
+  const initialSession = useInitialSession();
+
   return useQuery({
     queryKey: ["session"],
     queryFn: () => apiFetch<SessionUser>("/auth/me"),
     staleTime: 5 * 60 * 1000,
     retry: false,
+    ...(initialSession ? { initialData: initialSession } : {}),
   });
 }
 

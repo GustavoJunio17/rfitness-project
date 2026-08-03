@@ -3,12 +3,21 @@ import { isRole, type Role } from "@rfitness/core";
 /** Cookie que guarda qual academia da rede o gestor está olhando agora. */
 export const ACTIVE_GYM_COOKIE = "rf_active_gym";
 
-/** Vínculo de uma pessoa com uma academia, já com os papéis daquele tenant. */
+/**
+ * Vínculo de uma pessoa com uma academia, já com os papéis daquele tenant.
+ *
+ * Carrega também o id do perfil e a instância de WhatsApp da unidade: são os
+ * dados que o painel pede logo em seguida, e buscá-los aqui — onde a consulta
+ * já está sendo feita — evita duas idas extras ao banco em cada carregamento.
+ */
 export interface GymMembership {
   gymId: string;
   gymName: string;
   gymSlug: string;
   roles: Role[];
+  /** id do `User` (perfil) desta pessoa nesta academia. */
+  userId: string;
+  whatsappInstanceName: string | null;
 }
 
 export interface Identity {
@@ -19,7 +28,9 @@ export interface Identity {
 }
 
 interface SupabaseUserLike {
-  id: string;
+  id?: string;
+  /** `getClaims` devolve o id em `sub`, não em `id`. */
+  sub?: string;
   email?: string | null;
   app_metadata?: Record<string, unknown> | null;
   user_metadata?: Record<string, unknown> | null;
@@ -36,11 +47,16 @@ interface SupabaseUserLike {
 export function identityFromUser(user: SupabaseUserLike | null | undefined): Identity | null {
   if (!user) return null;
 
+  // Aceita as duas formas porque a sessão pode vir do usuário completo do Auth
+  // (`id`) ou das claims verificadas localmente (`sub`).
+  const authUserId = user.id ?? user.sub;
+  if (!authUserId) return null;
+
   const email = user.email ?? "";
   const metadataName = user.user_metadata?.name;
   const name = typeof metadataName === "string" && metadataName.length > 0 ? metadataName : email;
 
-  return { authUserId: user.id, email, name };
+  return { authUserId, email, name };
 }
 
 /** Descarta papel que não existe no domínio em vez de repassá-lo adiante. */

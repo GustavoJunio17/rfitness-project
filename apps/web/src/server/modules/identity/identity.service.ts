@@ -43,8 +43,19 @@ export interface CurrentUserDto {
   access: AccountStatusDto | null;
 }
 
-/** Perfil da sessão atual, com a rede de academias e a unidade ativa. */
-export async function getCurrentUser(auth: AuthContext): Promise<CurrentUserDto> {
+/**
+ * Perfil da sessão atual, com a rede de academias e a unidade ativa.
+ *
+ * `touch` registra o acesso em `lastLoginAt`. Só a rota HTTP o passa: ela é
+ * chamada quando o cliente realmente busca a sessão — logo após o login, por
+ * exemplo. O layout do painel chama esta função a cada navegação, e marcar
+ * "último acesso" a cada página seria uma escrita por request para registrar
+ * um dado que só interessa por login.
+ */
+export async function getCurrentUser(
+  auth: AuthContext,
+  options: { touch?: boolean } = {},
+): Promise<CurrentUserDto> {
   const base = {
     name: auth.name,
     email: auth.email,
@@ -57,40 +68,45 @@ export async function getCurrentUser(auth: AuthContext): Promise<CurrentUserDto>
     return { ...base, id: null, roles: [], gym: null, access };
   }
 
-  const gym = await prisma.gym.findUnique({
-    where: { id: auth.gymId },
-    select: { id: true, name: true, slug: true, whatsappInstanceName: true },
-  });
-  if (!gym) throw notFoundError("Academia não encontrada.");
+  // Nenhuma consulta aqui: o contexto de autenticação já carregou academia e
+  // perfil ao resolver os vínculos. Buscar de novo custava duas idas ao banco
+  // em série a cada carregamento de página do painel.
+  const membership = auth.memberships.find((candidate) => candidate.gymId === auth.gymId);
+  if (!membership) throw notFoundError("Academia não encontrada.");
 
-  // O perfil já existe (nasce junto com a academia); aqui só se registra o
-  // acesso. `updateMany` porque a operação é idempotente e não deve estourar se
-  // o perfil for desativado entre a leitura do contexto e agora.
-  await prisma.user.updateMany({
-    where: { authUserId: auth.authUserId, gymId: auth.gymId },
-    data: { lastLoginAt: new Date() },
-  });
+  if (options.touch) {
+    await prisma.user.update({
+      where: { id: membership.userId },
+      data: { lastLoginAt: new Date() },
+    });
+  }
 
-  const user = await prisma.user.findUnique({
-    where: { authUserId_gymId: { authUserId: auth.authUserId, gymId: auth.gymId } },
-    select: { id: true },
-  });
-
-  return { ...base, id: user?.id ?? null, roles: auth.roles, gym, access: null };
+  return {
+    ...base,
+    id: membership.userId,
+    roles: auth.roles,
+    gym: {
+      id: membership.gymId,
+      name: membership.gymName,
+      slug: membership.gymSlug,
+      whatsappInstanceName: membership.whatsappInstanceName,
+    },
+    access: null,
+  };
 }
 
 /**
- * id do `User` (perfil) a partir do id de Auth — usado onde o banco precisa da
- * FK do perfil (ex.: `Sale.employeeId`), não do id do Supabase. É por academia:
- * a mesma pessoa tem um perfil diferente em cada unidade.
+ * id do `User` (perfil) na academia ativa — usado onde o banco precisa da FK do
+ * perfil (ex.: `Sale.employeeId`), não do id do Supabase.
+ *
+ * Sai do contexto já carregado, sem consulta: registrar uma venda ou um
+ * movimento de estoque não deve custar uma ida ao banco só para descobrir de
+ * quem é o perfil que a própria sessão já resolveu.
  */
-export async function resolveUserId(authUserId: string, gymId: string): Promise<string> {
-  const user = await prisma.user.findUnique({
-    where: { authUserId_gymId: { authUserId, gymId } },
-    select: { id: true },
-  });
-  if (!user) throw notFoundError("Perfil de usuário não encontrado nesta academia.");
-  return user.id;
+export function currentProfileId(auth: AuthContext): string {
+  const membership = auth.memberships.find((candidate) => candidate.gymId === auth.gymId);
+  if (!membership) throw notFoundError("Perfil de usuário não encontrado nesta academia.");
+  return membership.userId;
 }
 
 /** A rede do gestor: academias em que ele tem perfil, com um resumo de cada. */
