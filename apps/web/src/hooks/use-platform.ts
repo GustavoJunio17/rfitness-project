@@ -36,6 +36,19 @@ export interface PlatformOverview {
   accounts: { total: number; pending: number; active: number; blocked: number };
 }
 
+export interface Page<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface GymOption {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
 /**
  * Tudo do console sai do mesmo par de listas, e quase toda ação mexe nas duas
  * — mudar o dono de uma academia altera a linha do gestor também. Invalidar em
@@ -47,9 +60,16 @@ function useConsoleMutation<TData, TVariables>(mutationFn: (variables: TVariable
   return useMutation({
     mutationFn,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["platform-accounts"] });
-      queryClient.invalidateQueries({ queryKey: ["platform-gyms"] });
-      queryClient.invalidateQueries({ queryKey: ["platform-overview"] });
+      for (const key of [
+        "platform-accounts",
+        "platform-account",
+        "platform-gyms",
+        "platform-gym",
+        "platform-gym-options",
+        "platform-overview",
+      ]) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
     },
   });
 }
@@ -61,15 +81,49 @@ export function usePlatformOverview() {
   });
 }
 
-export function useManagerAccounts(filter: { status?: ManagerAccountStatus; search?: string } = {}) {
+function toQuery(filter: Record<string, string | number | undefined>): string {
   const params = new URLSearchParams();
-  if (filter.status) params.set("status", filter.status);
-  if (filter.search) params.set("search", filter.search);
+  for (const [key, value] of Object.entries(filter)) {
+    if (value !== undefined && value !== "") params.set(key, String(value));
+  }
   const query = params.toString();
+  return query ? `?${query}` : "";
+}
 
+export function useManagerAccounts(
+  filter: { status?: ManagerAccountStatus; search?: string; page?: number; pageSize?: number } = {},
+) {
   return useQuery({
-    queryKey: ["platform-accounts", filter.status ?? "all", filter.search ?? ""],
-    queryFn: () => apiFetch<ManagerAccount[]>(`/platform/accounts${query ? `?${query}` : ""}`),
+    queryKey: [
+      "platform-accounts",
+      filter.status ?? "all",
+      filter.search ?? "",
+      filter.page ?? 1,
+      filter.pageSize ?? 20,
+    ],
+    queryFn: () => apiFetch<Page<ManagerAccount>>(`/platform/accounts${toQuery(filter)}`),
+  });
+}
+
+/**
+ * Detalhe da conta.
+ *
+ * Consulta própria em vez de reaproveitar a linha da lista: o painel fica
+ * aberto enquanto se concede acesso a academias, e o objeto capturado no clique
+ * não acompanharia essas mudanças.
+ */
+export function useManagerAccount(id: string | null) {
+  return useQuery({
+    queryKey: ["platform-account", id],
+    queryFn: () => apiFetch<ManagerAccount>(`/platform/accounts/${id}`),
+    enabled: id !== null,
+  });
+}
+
+export function useGymOptions() {
+  return useQuery({
+    queryKey: ["platform-gym-options"],
+    queryFn: () => apiFetch<GymOption[]>("/platform/gyms/options"),
   });
 }
 
@@ -114,15 +168,23 @@ export function useDeleteManagerAccount() {
   );
 }
 
-export function usePlatformGyms() {
+export function usePlatformGyms(filter: { search?: string; page?: number; pageSize?: number } = {}) {
   return useQuery({
-    queryKey: ["platform-gyms"],
-    queryFn: () => apiFetch<PlatformGym[]>("/platform/gyms"),
+    queryKey: ["platform-gyms", filter.search ?? "", filter.page ?? 1, filter.pageSize ?? 20],
+    queryFn: () => apiFetch<Page<PlatformGym>>(`/platform/gyms${toQuery(filter)}`),
+  });
+}
+
+export function usePlatformGym(id: string | null) {
+  return useQuery({
+    queryKey: ["platform-gym", id],
+    queryFn: () => apiFetch<PlatformGym>(`/platform/gyms/${id}`),
+    enabled: id !== null,
   });
 }
 
 export function useCreatePlatformGym() {
-  return useConsoleMutation((input: { name: string; ownerAccountId: string }) =>
+  return useConsoleMutation((input: { name: string; ownerAccountId?: string | null }) =>
     apiFetch<{ id: string }>("/platform/gyms", { method: "POST", body: JSON.stringify(input) }),
   );
 }

@@ -43,9 +43,21 @@ export const signUpSchema = z.object({
 
 export const managerAccountStatusSchema = z.enum(["PENDING", "ACTIVE", "REJECTED", "SUSPENDED"]);
 
+/** Paginação das listagens do console. */
+const pageQuery = {
+  page: z.coerce.number().int().min(1).optional(),
+  pageSize: z.coerce.number().int().min(5).max(100).optional(),
+};
+
 export const managerAccountQuery = z.object({
   status: managerAccountStatusSchema.optional(),
   search: z.string().trim().min(1).max(120).optional(),
+  ...pageQuery,
+});
+
+export const platformGymQuery = z.object({
+  search: z.string().trim().min(1).max(120).optional(),
+  ...pageQuery,
 });
 
 export const createManagerAccountSchema = z.object({
@@ -72,9 +84,11 @@ export const setPasswordSchema = z.object({
 
 export const createGymSchema = z.object({ name: z.string().trim().min(2).max(120) });
 
+// Dono opcional: a academia pode nascer sem gestor e receber um depois, pelo
+// detalhe da conta.
 export const createPlatformGymSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  ownerAccountId: z.string().uuid(),
+  ownerAccountId: z.string().uuid().optional().nullable(),
 });
 
 export const updatePlatformGymSchema = z

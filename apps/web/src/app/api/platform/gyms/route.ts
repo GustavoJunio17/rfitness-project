@@ -1,10 +1,11 @@
 import { defineRoute } from "@/server/http/route";
-import { createPlatformGymSchema } from "@/server/http/schemas";
+import { createPlatformGymSchema, platformGymQuery } from "@/server/http/schemas";
 import { createPlatformGym, listPlatformGyms } from "@/server/modules/platform/platform.service";
 
 export const GET = defineRoute({
   scope: "platform",
-  handler: async () => listPlatformGyms(),
+  query: platformGymQuery,
+  handler: async ({ query }) => listPlatformGyms(query),
 });
 
 export const POST = defineRoute({

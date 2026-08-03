@@ -159,9 +159,7 @@ export async function createGym(
 
   const gym = await provisionGym({
     gymName: name,
-    ownerAuthUserId: auth.authUserId,
-    ownerName: auth.name,
-    ownerEmail: auth.email,
+    owner: { authUserId: auth.authUserId, name: auth.name, email: auth.email },
   });
 
   await syncGymIdsMetadata(auth.authUserId);

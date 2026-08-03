@@ -1,6 +1,16 @@
 import { defineRoute } from "@/server/http/route";
 import { updatePlatformGymSchema, uuidParam } from "@/server/http/schemas";
-import { deletePlatformGym, updatePlatformGym } from "@/server/modules/platform/platform.service";
+import {
+  deletePlatformGym,
+  getPlatformGym,
+  updatePlatformGym,
+} from "@/server/modules/platform/platform.service";
+
+export const GET = defineRoute({
+  scope: "platform",
+  params: uuidParam,
+  handler: async ({ params }) => getPlatformGym(params.id),
+});
 
 export const PATCH = defineRoute({
   scope: "platform",

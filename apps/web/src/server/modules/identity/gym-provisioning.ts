@@ -32,35 +32,36 @@ async function nextSlug(gymName: string): Promise<string> {
 
 export interface ProvisionGymInput {
   gymName: string;
-  /** Gestor dono: vira o perfil ADMIN da unidade. */
-  ownerAuthUserId: string;
-  ownerName: string;
-  ownerEmail: string;
+  /**
+   * Gestor dono. Opcional: o admin da plataforma cria a unidade primeiro e
+   * decide depois quem cuida dela — obrigar a escolher no mesmo passo forçaria
+   * uma decisão que ele pode ainda não ter tomado.
+   */
+  owner?: { authUserId: string; name: string; email: string };
 }
 
 export interface ProvisionedGym {
   id: string;
   name: string;
   slug: string;
-  userId: string;
+  /** Perfil do dono, quando a academia nasceu com um. */
+  userId: string | null;
 }
 
 /**
  * Cria uma academia pronta para uso: papéis do sistema, regras de cobrança
- * padrão e o perfil ADMIN do gestor — tudo numa transação.
+ * padrão e, se houver dono, o perfil ADMIN dele — tudo numa transação.
  *
- * É o único caminho para nascer uma academia (aprovação de pedido ou nova
- * unidade da rede). Uma unidade sem papéis ou sem dono seria um tenant em que
- * ninguém consegue entrar.
+ * É o único caminho para nascer uma academia. Uma unidade sem os papéis do
+ * sistema seria um tenant em que ninguém consegue receber permissão.
  */
 export async function provisionGym(input: ProvisionGymInput): Promise<ProvisionedGym> {
   const slug = await nextSlug(input.gymName);
   const name = input.gymName.trim();
-  const email = input.ownerEmail.trim().toLowerCase();
 
   return prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     const gym = await tx.gym.create({
-      data: { name, slug, ownerAuthUserId: input.ownerAuthUserId },
+      data: { name, slug, ownerAuthUserId: input.owner?.authUserId ?? null },
     });
 
     await tx.role.createMany({
@@ -74,6 +75,10 @@ export async function provisionGym(input: ProvisionGymInput): Promise<Provisione
       })),
     });
 
+    if (!input.owner) {
+      return { id: gym.id, name: gym.name, slug: gym.slug, userId: null };
+    }
+
     const adminRole = await tx.role.findUniqueOrThrow({
       where: { gymId_name: { gymId: gym.id, name: "ADMIN" } },
       select: { id: true },
@@ -81,10 +86,10 @@ export async function provisionGym(input: ProvisionGymInput): Promise<Provisione
 
     const user = await tx.user.create({
       data: {
-        authUserId: input.ownerAuthUserId,
+        authUserId: input.owner.authUserId,
         gymId: gym.id,
-        name: input.ownerName.trim(),
-        email,
+        name: input.owner.name.trim(),
+        email: input.owner.email.trim().toLowerCase(),
         roles: { create: { roleId: adminRole.id } },
       },
       select: { id: true },

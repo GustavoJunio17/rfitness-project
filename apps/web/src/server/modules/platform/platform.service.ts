@@ -99,28 +99,54 @@ async function withGyms(accounts: AccountRow[]): Promise<ManagerAccountDto[]> {
   }));
 }
 
+/** Envelope de listagem paginada. */
+export interface Page<T> {
+  items: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
 export async function listManagerAccounts(filter: {
   status?: ManagerAccountStatus;
   search?: string;
-}): Promise<ManagerAccountDto[]> {
-  const accounts = await prisma.managerAccount.findMany({
-    where: {
-      ...(filter.status ? { status: filter.status } : {}),
-      ...(filter.search
-        ? {
-            OR: [
-              { name: { contains: filter.search, mode: "insensitive" as const } },
-              { email: { contains: filter.search, mode: "insensitive" as const } },
-            ],
-          }
-        : {}),
-    },
-    select: ACCOUNT_SELECT,
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    take: 200,
-  });
+  page?: number;
+  pageSize?: number;
+}): Promise<Page<ManagerAccountDto>> {
+  const page = Math.max(1, filter.page ?? 1);
+  const pageSize = Math.min(100, Math.max(5, filter.pageSize ?? 20));
 
-  return withGyms(accounts);
+  const where = {
+    ...(filter.status ? { status: filter.status } : {}),
+    ...(filter.search
+      ? {
+          OR: [
+            { name: { contains: filter.search, mode: "insensitive" as const } },
+            { email: { contains: filter.search, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const [accounts, total] = await Promise.all([
+    prisma.managerAccount.findMany({
+      where,
+      select: ACCOUNT_SELECT,
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.managerAccount.count({ where }),
+  ]);
+
+  return { items: await withGyms(accounts), total, page, pageSize };
+}
+
+/** Uma conta só, já com as academias — usada pela tela de detalhe. */
+export async function getManagerAccount(id: string): Promise<ManagerAccountDto> {
+  const account = await prisma.managerAccount.findUnique({ where: { id }, select: ACCOUNT_SELECT });
+  if (!account) throw notFoundError("Conta não encontrada.");
+  return (await withGyms([account]))[0]!;
 }
 
 async function getAccountOrThrow(id: string) {
@@ -401,30 +427,41 @@ export interface PlatformGymDto {
   counts: { students: number; products: number; users: number };
 }
 
-/**
- * Todas as academias da plataforma. Cadastro e volume apenas — faturamento e
- * dado de aluno continuam sendo do tenant, e admin de plataforma não é dono deles.
- */
-export async function listPlatformGyms(): Promise<PlatformGymDto[]> {
-  const gyms = await prisma.gym.findMany({
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      isActive: true,
-      createdAt: true,
-      ownerAuthUserId: true,
-      users: { select: { authUserId: true, name: true, email: true } },
-      _count: { select: { students: true, products: true, users: true } },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 200,
-  });
+const GYM_SELECT = {
+  id: true,
+  name: true,
+  slug: true,
+  isActive: true,
+  createdAt: true,
+  ownerAuthUserId: true,
+  users: { select: { authUserId: true, name: true, email: true } },
+  _count: { select: { students: true, products: true, users: true } },
+} as const;
 
-  // O id da conta não vem do perfil (que é por academia); uma consulta só
-  // resolve o mapeamento para todos os gestores de uma vez.
+type GymRow = {
+  id: string;
+  name: string;
+  slug: string;
+  isActive: boolean;
+  createdAt: Date;
+  ownerAuthUserId: string | null;
+  users: { authUserId: string; name: string; email: string }[];
+  _count: { students: number; products: number; users: number };
+};
+
+/**
+ * Resolve os gestores de cada academia.
+ *
+ * O id da conta não vem do perfil — o perfil é por academia, a conta é da
+ * pessoa. Uma consulta só faz o mapeamento de todos os gestores da página, em
+ * vez de uma por linha.
+ */
+async function withManagers(gyms: GymRow[]): Promise<PlatformGymDto[]> {
+  if (gyms.length === 0) return [];
+
+  const authUserIds = [...new Set(gyms.flatMap((gym) => gym.users.map((user) => user.authUserId)))];
   const accounts = await prisma.managerAccount.findMany({
-    where: { authUserId: { in: [...new Set(gyms.flatMap((gym) => gym.users.map((u) => u.authUserId)))] } },
+    where: { authUserId: { in: authUserIds } },
     select: { id: true, authUserId: true },
   });
   const accountIdByAuthUser = new Map(accounts.map((account) => [account.authUserId, account.id]));
@@ -454,24 +491,72 @@ export async function listPlatformGyms(): Promise<PlatformGymDto[]> {
   });
 }
 
-/** Cria a academia já com um gestor dono. */
+/**
+ * Academias da plataforma, paginadas. Cadastro e volume apenas — faturamento e
+ * dado de aluno continuam sendo do tenant, e admin de plataforma não é dono deles.
+ */
+export async function listPlatformGyms(filter: {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<Page<PlatformGymDto>> {
+  const page = Math.max(1, filter.page ?? 1);
+  const pageSize = Math.min(100, Math.max(5, filter.pageSize ?? 20));
+
+  const where = filter.search
+    ? { name: { contains: filter.search, mode: "insensitive" as const } }
+    : {};
+
+  const [gyms, total] = await Promise.all([
+    prisma.gym.findMany({
+      where,
+      select: GYM_SELECT,
+      orderBy: { createdAt: "desc" },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.gym.count({ where }),
+  ]);
+
+  return { items: await withManagers(gyms), total, page, pageSize };
+}
+
+/** Uma academia só — usada pela tela de detalhe. */
+export async function getPlatformGym(id: string): Promise<PlatformGymDto> {
+  const gym = await prisma.gym.findUnique({ where: { id }, select: GYM_SELECT });
+  if (!gym) throw notFoundError("Academia não encontrada.");
+  return (await withManagers([gym]))[0]!;
+}
+
+/** Academias em forma de opção — o suficiente para montar seletores. */
+export async function listGymOptions(): Promise<{ id: string; name: string; isActive: boolean }[]> {
+  return prisma.gym.findMany({
+    select: { id: true, name: true, isActive: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+/**
+ * Cria a academia. O dono é opcional — o admin cadastra a unidade e define
+ * depois, no detalhe do gestor, quem tem acesso a ela.
+ */
 export async function createPlatformGym(
   auth: AuthContext,
-  input: { name: string; ownerAccountId: string },
+  input: { name: string; ownerAccountId?: string | null },
 ): Promise<{ id: string }> {
   await requireReviewer(auth);
-  const owner = await getAccountOrThrow(input.ownerAccountId);
-  if (owner.status !== "ACTIVE") {
-    throw conflictError("O gestor dono precisa estar com a conta ativa.");
+
+  let owner: { authUserId: string; name: string; email: string } | undefined;
+  if (input.ownerAccountId) {
+    const account = await getAccountOrThrow(input.ownerAccountId);
+    if (account.status !== "ACTIVE") {
+      throw conflictError("O gestor dono precisa estar com a conta ativa.");
+    }
+    owner = { authUserId: account.authUserId, name: account.name, email: account.email };
   }
 
-  const gym = await provisionGym({
-    gymName: input.name,
-    ownerAuthUserId: owner.authUserId,
-    ownerName: owner.name,
-    ownerEmail: owner.email,
-  });
-  await syncGymIdsMetadata(owner.authUserId);
+  const gym = await provisionGym({ gymName: input.name, owner });
+  if (owner) await syncGymIdsMetadata(owner.authUserId);
 
   return { id: gym.id };
 }
