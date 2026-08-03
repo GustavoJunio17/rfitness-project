@@ -112,6 +112,12 @@ upload de foto (Storage).
    chegam ao build. Build e output ficam nos defaults do preset Next.js — `apps/web/package.json`
    já gera o Prisma Client antes do `next build`, e `apps/web/vercel.json` declara os Cron Jobs.
    Configure todas as variáveis do `.env.example` no projeto (inclusive `CRON_SECRET`).
+
+   `vercel.json` também fixa `"regions": ["gru1"]` (São Paulo) — **mantenha isso alinhado com a
+   região do seu projeto Supabase**. Na região padrão da Vercel (Washington) com o banco em
+   `sa-east-1`, cada consulta ao Postgres atravessa o continente ida e volta, e são várias por
+   request: é a diferença entre o painel abrir na hora e parecer travado. Depois do deploy dá
+   para conferir em *Deployment → Functions*.
 5. **WhatsApp (opcional)** — suba a Evolution API (`docker compose --profile whatsapp up -d`),
    aponte o webhook da instância para
    `https://<seu-app>/api/whatsapp/webhook?token=<EVOLUTION_API_KEY>` e salve o nome da

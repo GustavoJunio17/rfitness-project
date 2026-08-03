@@ -1,9 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-
-  "//": "gru1 (São Paulo) é a região do projeto Supabase (sa-east-1). Sem isto as funções rodam no padrão (Washington) e cada consulta ao Postgres atravessa o continente ida e volta — com várias idas ao banco por request, é o que fazia a navegação parecer travada.",
   "regions": ["gru1"],
-
   "crons": [
     {
       "path": "/api/cron/stock-alerts",
