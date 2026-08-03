@@ -11,7 +11,6 @@ import {
   ClipboardList,
   BarChart3,
   MessageCircle,
-  Building2,
   ShieldCheck,
   UserCog,
   type LucideIcon,
@@ -42,7 +41,6 @@ const GYM_ITEMS: NavItem[] = [
   { href: "/dashboard/relatorios", label: "Relatórios", icon: BarChart3 },
 ];
 
-const GYMS_ITEM: NavItem = { href: "/dashboard/academias", label: "Minhas academias", icon: Building2 };
 const ACCOUNT_ITEM: NavItem = { href: "/dashboard/conta", label: "Conta", icon: UserCog };
 const PLATFORM_ITEM: NavItem = { href: "/dashboard/plataforma", label: "Plataforma", icon: ShieldCheck };
 
@@ -70,16 +68,14 @@ export function Sidebar() {
   // Sem academia ativa, os links de operação levariam a telas que só sabem
   // responder erro — some com eles em vez de oferecer becos sem saída.
   const hasGym = Boolean(session?.gym);
-  const isPending = session?.access?.status === "PENDING" || session?.access?.status === "REJECTED";
 
   const groups: NavGroup[] = [];
   if (hasGym) groups.push({ label: "Academia", items: GYM_ITEMS });
 
-  const accountItems: NavItem[] = [];
-  // Cadastro em análise não gerencia rede nenhuma: a tela existiria só para
-  // recusar a criação de academia.
-  if (!isPending && !session?.isPlatformAdmin) accountItems.push(GYMS_ITEM);
-  accountItems.push(ACCOUNT_ITEM);
+  // O gestor não administra a rede: quem cadastra academia e define quem a
+  // acessa é a administração da RFitness. Para ele, o seletor da topbar é o
+  // conjunto fechado do que dá para operar.
+  const accountItems: NavItem[] = [ACCOUNT_ITEM];
   if (session?.isPlatformAdmin) accountItems.push(PLATFORM_ITEM);
   groups.push({ label: "Conta", items: accountItems });
 

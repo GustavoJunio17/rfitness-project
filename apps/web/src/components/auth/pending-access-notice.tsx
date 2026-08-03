@@ -57,7 +57,7 @@ export function PendingAccessNotice({
           <p className="text-sm text-muted-foreground">
             {blocked
               ? "Não é possível usar o painel com esta conta."
-              : "Enquanto isso não é possível entrar no painel nem cadastrar academias."}
+              : "Enquanto isso não é possível entrar no painel."}
           </p>
           <p className="text-xs text-muted-foreground">
             Conta: <span className="font-medium text-foreground">{email}</span>

@@ -43,8 +43,9 @@ sempre vira 500 genérico — mensagem interna não vaza.
   copiado do JWT seria uma segunda fonte de verdade fadada a divergir da tabela de papéis.
   Nenhuma rota aceita `gymId` do cliente.
 - **Dois níveis, dois trabalhos.** O admin da plataforma faz CRUD de contas de gestor e de
-  academias, e decide quem gerencia o quê. O gestor toca o dia a dia das academias em que tem
-  perfil — que podem ser várias.
+  academias, e decide quem gerencia o quê. O gestor **não** cadastra unidade nem concede acesso:
+  ele opera o dia a dia das academias que recebeu, e o seletor da topbar é o conjunto fechado do
+  que ele alcança.
 - **Cadastro cria a conta; a RFitness libera o acesso.** `/cadastro` pede nome, e-mail e senha
   — só isso. A conta nasce travada: até ser liberada, o login é recusado com o aviso na própria
   tela e o painel nem chega a renderizar (`/acesso-pendente`).

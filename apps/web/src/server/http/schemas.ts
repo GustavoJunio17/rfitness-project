@@ -33,8 +33,8 @@ const positiveInt = z.number().int().positive();
 // O slug da academia não entra aqui de propósito: é interno e derivado do nome
 // no servidor, para o cliente não escolher nem descobrir o identificador.
 //
-// O cadastro pede o mínimo: nome, e-mail e senha. A academia não entra aqui —
-// ela é criada pelo próprio gestor depois que a RFitness libera a conta.
+// O cadastro pede o mínimo: nome, e-mail e senha. Academia não entra aqui nem
+// depois — cadastrar unidade e vincular gestor é da administração da RFitness.
 export const signUpSchema = z.object({
   requesterName: z.string().trim().min(2).max(120),
   requesterEmail: z.string().trim().email(),
@@ -82,8 +82,6 @@ export const setPasswordSchema = z.object({
   password: z.string().min(PASSWORD_MIN_LENGTH, "A senha deve ter no mínimo 8 caracteres.").max(72),
 });
 
-export const createGymSchema = z.object({ name: z.string().trim().min(2).max(120) });
-
 // Dono opcional: a academia pode nascer sem gestor e receber um depois, pelo
 // detalhe da conta.
 export const createPlatformGymSchema = z.object({
@@ -105,13 +103,6 @@ export const accountIdParam = z.object({
   id: z.string().uuid("Identificador inválido."),
   accountId: z.string().uuid("Identificador inválido."),
 });
-
-export const updateGymSchema = z
-  .object({
-    name: z.string().trim().min(2).max(120).optional(),
-    isActive: z.boolean().optional(),
-  })
-  .refine((value) => value.name !== undefined || value.isActive !== undefined, "Nada para alterar.");
 
 export const activeGymSchema = z.object({ gymId: z.string().uuid() });
 

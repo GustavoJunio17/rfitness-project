@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useSession } from "@/hooks/use-session";
 
 /** Telas que funcionam sem academia ativa. */
-const GYM_FREE_PREFIXES = ["/dashboard/academias", "/dashboard/conta", "/dashboard/plataforma"];
+const GYM_FREE_PREFIXES = ["/dashboard/conta", "/dashboard/plataforma"];
 
 /**
  * Tira de telas operacionais quem está sem academia ativa.
@@ -27,7 +27,7 @@ export function NoGymGate() {
     if (pathname === "/dashboard") return;
     if (GYM_FREE_PREFIXES.some((prefix) => pathname.startsWith(prefix))) return;
 
-    router.replace(session.isPlatformAdmin ? "/dashboard/plataforma" : "/dashboard/academias");
+    router.replace(session.isPlatformAdmin ? "/dashboard/plataforma" : "/dashboard");
   }, [session, pathname, router]);
 
   return null;

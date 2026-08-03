@@ -17,9 +17,8 @@ export function resolveDashboardEntry(
   // por algum motivo tenha um vínculo.
   if (auth.isPlatformAdmin) return "/dashboard/plataforma";
 
-  // Gestor sem unidade ativa escolhe uma antes; a visão geral não teria o que
-  // mostrar.
-  if (!auth.gymId) return "/dashboard/academias";
-
+  // Gestor sem academia fica em `/dashboard`, que explica a situação. Não há
+  // para onde mandá-lo: quem libera o acesso a uma unidade é a administração
+  // da RFitness, então não existe ação dele que resolva.
   return null;
 }

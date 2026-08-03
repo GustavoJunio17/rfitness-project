@@ -6,8 +6,8 @@ describe("resolveDashboardEntry", () => {
     expect(resolveDashboardEntry({ isPlatformAdmin: false, gymId: "gym-1" })).toBeNull();
   });
 
-  it("gestor sem academia vai escolher uma", () => {
-    expect(resolveDashboardEntry({ isPlatformAdmin: false, gymId: "" })).toBe("/dashboard/academias");
+  it("gestor sem academia fica em /dashboard — não há ação dele que resolva", () => {
+    expect(resolveDashboardEntry({ isPlatformAdmin: false, gymId: "" })).toBeNull();
   });
 
   it("admin de plataforma vai para o console", () => {

@@ -1,10 +1,17 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { Building2, Check, ChevronDown, Loader2, Plus, Settings2 } from "lucide-react";
+import { Building2, Check, ChevronDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSession, useSwitchGym } from "@/hooks/use-session";
+
+/**
+ * `bg-card`, não `bg-popover`: o tema não define a cor de popover, então a
+ * classe não gerava regra nenhuma e o menu ficava transparente sobre o
+ * conteúdo atrás dele.
+ */
+const MENU_CLASS =
+  "absolute right-0 z-50 mt-1 w-72 overflow-hidden rounded-md border border-border bg-card shadow-lg";
 
 /**
  * Seletor da academia ativa.
@@ -81,7 +88,7 @@ export function GymSwitcher() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-1 w-72 overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+        <div className={MENU_CLASS}>
           <p className="border-b border-border px-3 py-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
             Suas academias
           </p>
@@ -118,24 +125,9 @@ export function GymSwitcher() {
             })}
           </ul>
 
-          <div className="border-t border-border">
-            <Link
-              href="/dashboard/academias"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <Settings2 className="h-4 w-4" aria-hidden />
-              Gerenciar academias
-            </Link>
-            <Link
-              href="/dashboard/academias?nova=1"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-              Nova academia
-            </Link>
-          </div>
+          {/* Sem atalhos de criação ou gestão: quem cadastra academia e define
+              quem a acessa é a administração da RFitness. Para o gestor esta
+              lista é o conjunto fechado do que ele pode operar. */}
         </div>
       )}
     </div>
