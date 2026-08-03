@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAuthContext } from "@/server/auth/context";
+import { resolveDashboardEntry } from "@/server/auth/dashboard-entry";
 import { DashboardOverview } from "@/components/dashboard/overview";
 
 export const dynamic = "force-dynamic";
@@ -16,8 +17,8 @@ export default async function DashboardPage() {
   const auth = await getAuthContext();
   if (!auth) redirect("/login?redirect=/dashboard");
 
-  if (auth.isPlatformAdmin) redirect("/dashboard/plataforma");
-  if (!auth.gymId) redirect("/dashboard/academias");
+  const destination = resolveDashboardEntry(auth);
+  if (destination) redirect(destination);
 
   return <DashboardOverview />;
 }
