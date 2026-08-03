@@ -77,6 +77,33 @@ describe("defineRoute — autenticação", () => {
   });
 });
 
+describe("defineRoute — cache", () => {
+  it("resposta de sucesso proíbe armazenamento e varia por cookie", async () => {
+    const handler = defineRoute({ handler: async () => ({ ok: true }) }, deps(adminAuth));
+    const response = await handler(request());
+
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("cache-control")).toContain("private");
+    expect(response.headers.get("vary")).toBe("Cookie");
+  });
+
+  it("204 também proíbe armazenamento", async () => {
+    const handler = defineRoute({ handler: async () => undefined }, deps(adminAuth));
+    const response = await handler(request());
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+  });
+
+  it("resposta de erro proíbe armazenamento", async () => {
+    const handler = defineRoute({ handler: async () => ({ ok: true }) }, deps(null));
+    const response = await handler(request());
+
+    expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+  });
+});
+
 describe("defineRoute — escopo", () => {
   it("rota de academia responde 409 quando não há academia ativa", async () => {
     const handler = defineRoute({ handler: async () => ({ ok: true }) }, deps(noGymAuth));

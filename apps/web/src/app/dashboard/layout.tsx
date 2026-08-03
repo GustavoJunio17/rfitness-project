@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { RealtimeBridge } from "@/components/layout/realtime-bridge";
 import { NoGymGate } from "@/components/layout/no-gym-gate";
+import { SessionGuard } from "@/components/layout/session-guard";
 import type { SessionUser } from "@/hooks/use-session";
 
 // Shell autenticado depende de cookies de sessão — dinâmico por definição.
@@ -40,8 +41,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   };
 
   return (
-    <InitialSessionProvider session={session}>
+    // `key` pela identidade: se o React reaproveitasse a árvore de uma conta
+    // para outra, o estado dos componentes (menu aberto, filtros, formulários)
+    // viria junto. Trocar a chave força uma montagem limpa.
+    <InitialSessionProvider key={auth.authUserId} session={session}>
       <div className="flex min-h-screen">
+        <SessionGuard expectedAuthUserId={auth.authUserId} />
         <RealtimeBridge />
         <NoGymGate />
         <Sidebar />

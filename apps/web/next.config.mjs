@@ -6,6 +6,14 @@ const repoRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    // O Router Cache do App Router reaproveita o payload de telas já visitadas
+    // por 30s. Esse cache é do navegador e não pertence a sessão nenhuma: ao
+    // trocar de conta na mesma aba, a shell renderizada para o usuário anterior
+    // reaparecia. Zerar desliga a reutilização — que tela cada pessoa pode ver
+    // depende de quem está logada, então nada aqui pode sobreviver à troca.
+    staleTimes: { dynamic: 0, static: 0 },
+  },
   // Os pacotes do workspace são publicados como TypeScript, sem build próprio.
   transpilePackages: ["@rfitness/core", "@rfitness/db"],
   // O Prisma carrega os engines nativos em runtime; empacotá-lo quebra o bundle

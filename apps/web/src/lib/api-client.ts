@@ -47,6 +47,9 @@ export async function apiFetch<T>(path: string, options: ApiRequestOptions = {})
     ...rest,
     body,
     credentials: "same-origin",
+    // A resposta depende de quem está logado; deixar o navegador reaproveitar
+    // uma resposta anterior é servir dado de outra conta.
+    cache: "no-store",
     headers: {
       ...(body instanceof FormData ? {} : { "Content-Type": "application/json" }),
       ...headers,

@@ -44,8 +44,21 @@ export interface RouteSpec<TBody, TQuery, TParams> {
   handler: (context: RouteHandlerContext<TBody, TQuery, TParams>) => Promise<unknown>;
 }
 
+/**
+ * Toda resposta da API é escopada por sessão — mesma URL, conteúdo diferente
+ * por usuário. Sem estes cabeçalhos, navegador e CDN podem guardar a resposta
+ * de uma conta e entregá-la para outra.
+ */
+const NO_STORE_HEADERS = {
+  "Cache-Control": "private, no-store, no-cache, must-revalidate, max-age=0",
+  Vary: "Cookie",
+} as const;
+
 function errorResponse(status: number, code: string, message: string, details?: unknown) {
-  return NextResponse.json({ error: { code, message, ...(details ? { details } : {}) } }, { status });
+  return NextResponse.json(
+    { error: { code, message, ...(details ? { details } : {}) } },
+    { status, headers: NO_STORE_HEADERS },
+  );
 }
 
 /**
@@ -229,9 +242,9 @@ export function defineRoute<TBody = undefined, TQuery = undefined, TParams = und
       });
 
       if (result === undefined || result === null) {
-        return new NextResponse(null, { status: 204 });
+        return new NextResponse(null, { status: 204, headers: NO_STORE_HEADERS });
       }
-      return NextResponse.json(result);
+      return NextResponse.json(result, { headers: NO_STORE_HEADERS });
     } catch (error) {
       if (isDomainError(error)) {
         return errorResponse(error.httpStatus, error.code, error.message, error.details);
