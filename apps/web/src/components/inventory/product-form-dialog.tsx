@@ -6,6 +6,7 @@ import { Dialog, DialogCloseButton, DialogHeader, DialogTitle } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -17,6 +18,7 @@ import {
   useSuppliers,
   type CreateProductVariantInput,
 } from "@/hooks/use-catalog";
+import { parseMoney } from "@/lib/masks";
 
 interface VariantDraft {
   brandId: string;
@@ -95,14 +97,22 @@ export function ProductFormDialog({ open, onOpenChange }: ProductFormDialogProps
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+
+    // Custo e venda em branco chegariam como zero e criariam a variante com
+    // preço zerado — a venda no balcão sairia de graça sem ninguém notar.
+    if (variants.some((variant) => parseMoney(variant.costPrice) === null || parseMoney(variant.salePrice) === null)) {
+      setError("Informe o preço de custo e o de venda de cada variante.");
+      return;
+    }
+
     try {
       const payload: CreateProductVariantInput[] = variants.map((variant) => ({
         brandId: variant.brandId || undefined,
         flavor: variant.flavor || undefined,
         weight: variant.weight || undefined,
         barcode: variant.barcode || undefined,
-        costPrice: Number(variant.costPrice),
-        salePrice: Number(variant.salePrice),
+        costPrice: parseMoney(variant.costPrice) ?? 0,
+        salePrice: parseMoney(variant.salePrice) ?? 0,
         minQuantity: Number(variant.minQuantity || 0),
         maxQuantity: variant.maxQuantity ? Number(variant.maxQuantity) : undefined,
         initialQuantity: Number(variant.initialQuantity || 0),
@@ -236,20 +246,16 @@ export function ProductFormDialog({ open, onOpenChange }: ProductFormDialogProps
                   value={variant.barcode}
                   onChange={(e) => updateVariant(index, "barcode", e.target.value)}
                 />
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="Preço de custo"
+                <MoneyInput
+                  aria-label="Preço de custo"
                   value={variant.costPrice}
-                  onChange={(e) => updateVariant(index, "costPrice", e.target.value)}
+                  onValueChange={(masked) => updateVariant(index, "costPrice", masked)}
                   required
                 />
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="Preço de venda"
+                <MoneyInput
+                  aria-label="Preço de venda"
                   value={variant.salePrice}
-                  onChange={(e) => updateVariant(index, "salePrice", e.target.value)}
+                  onValueChange={(masked) => updateVariant(index, "salePrice", masked)}
                   required
                 />
                 <Input

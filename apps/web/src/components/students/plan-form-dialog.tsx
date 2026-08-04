@@ -4,8 +4,10 @@ import { FormEvent, useState } from "react";
 import { Dialog, DialogCloseButton, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Label } from "@/components/ui/label";
 import { useCreatePlan } from "@/hooks/use-students";
+import { parseMoney } from "@/lib/masks";
 
 export function PlanFormDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const createPlan = useCreatePlan();
@@ -17,8 +19,14 @@ export function PlanFormDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    const priceValue = parseMoney(price);
+    if (priceValue === null) {
+      setError("Informe o preço do plano.");
+      return;
+    }
+
     try {
-      await createPlan.mutateAsync({ name, price: Number(price), durationDays: Number(durationDays) });
+      await createPlan.mutateAsync({ name, price: priceValue, durationDays: Number(durationDays) });
       setName("");
       setPrice("");
       setDurationDays("30");
@@ -41,15 +49,8 @@ export function PlanFormDialog({ open, onOpenChange }: { open: boolean; onOpenCh
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor="plan-price">Preço (R$)</Label>
-            <Input
-              id="plan-price"
-              type="number"
-              step="0.01"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              required
-            />
+            <Label htmlFor="plan-price">Preço</Label>
+            <MoneyInput id="plan-price" value={price} onValueChange={setPrice} required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="plan-duration">Duração (dias)</Label>

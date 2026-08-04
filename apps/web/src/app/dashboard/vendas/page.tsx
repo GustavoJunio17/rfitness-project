@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Minus, Plus, ScanLine, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -13,6 +14,7 @@ import { useCreateSale, useSales } from "@/hooks/use-sales";
 import { useStudents } from "@/hooks/use-students";
 import { BarcodeScannerDialog } from "@/components/shared/barcode-scanner-dialog";
 import { apiFetch, ApiError } from "@/lib/api-client";
+import { parseMoney } from "@/lib/masks";
 import type { PaymentMethodType } from "@/types/sales";
 
 interface CartItem {
@@ -40,7 +42,7 @@ export default function VendasPage() {
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethodType>("CASH");
-  const [discount, setDiscount] = useState("0");
+  const [discount, setDiscount] = useState("");
   const [isScannerOpen, setScannerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<{ totalAmount: string; totalProfit: string } | null>(null);
@@ -107,7 +109,9 @@ export default function VendasPage() {
   }
 
   const subtotal = cart.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0);
-  const discountValue = Number(discount || 0);
+  // Campo em branco é desconto nenhum — `parseMoney` devolve null para
+  // distinguir "não preenchido" de um zero digitado, e aqui os dois valem 0.
+  const discountValue = parseMoney(discount) ?? 0;
   const total = Math.max(subtotal - discountValue, 0);
 
   async function handleFinalizeSale() {
@@ -122,7 +126,7 @@ export default function VendasPage() {
       });
       setReceipt({ totalAmount: sale.totalAmount, totalProfit: sale.totalProfit });
       setCart([]);
-      setDiscount("0");
+      setDiscount("");
       setSelectedCustomer(null);
       setCustomerSearch("");
     } catch (err) {
@@ -306,7 +310,7 @@ export default function VendasPage() {
             </div>
             <div className="space-y-2">
               <span className="text-sm text-muted-foreground">Desconto (R$)</span>
-              <Input type="number" min={0} value={discount} onChange={(e) => setDiscount(e.target.value)} />
+              <MoneyInput value={discount} onValueChange={setDiscount} aria-label="Desconto" />
             </div>
             <div className="space-y-1 border-t border-border pt-3 text-sm">
               <div className="flex justify-between">

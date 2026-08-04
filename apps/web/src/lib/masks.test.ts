@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { formatCpf, formatPhone, maskCpf, maskPhone, onlyDigits } from "./masks";
+import {
+  formatCpf,
+  formatPhone,
+  maskCpf,
+  maskMoney,
+  maskPhone,
+  moneyToMask,
+  onlyDigits,
+  parseMoney,
+} from "./masks";
 
 describe("maskCpf", () => {
   it("monta o formato conforme os dígitos chegam", () => {
@@ -53,6 +62,81 @@ describe("maskPhone", () => {
   it("campo vazio continua vazio", () => {
     expect(maskPhone("")).toBe("");
     expect(maskPhone("abc")).toBe("");
+  });
+});
+
+describe("maskMoney", () => {
+  it("preenche os centavos da direita para a esquerda", () => {
+    expect(maskMoney("1")).toBe("0,01");
+    expect(maskMoney("12")).toBe("0,12");
+    expect(maskMoney("123")).toBe("1,23");
+    expect(maskMoney("123250")).toBe("1.232,50");
+  });
+
+  it("separa milhar a cada três casas", () => {
+    expect(maskMoney("100000")).toBe("1.000,00");
+    expect(maskMoney("123456789")).toBe("1.234.567,89");
+  });
+
+  it("ignora o que não é dígito — era o furo do input numérico", () => {
+    expect(maskMoney("1232p")).toBe("12,32");
+    expect(maskMoney("abc")).toBe("");
+    expect(maskMoney("")).toBe("");
+  });
+
+  it("reaplica sobre valor já mascarado, que é o caso a cada tecla", () => {
+    expect(maskMoney("1.232,50")).toBe("1.232,50");
+  });
+
+  it("apagar dígitos anda o valor de volta até esvaziar", () => {
+    expect(maskMoney("1.232,5")).toBe("123,25");
+    expect(maskMoney("0,0")).toBe("");
+    expect(maskMoney("0")).toBe("");
+  });
+
+  it("negativo só quando o campo permite", () => {
+    expect(maskMoney("-5000", { allowNegative: true })).toBe("-50,00");
+    expect(maskMoney("-5000")).toBe("50,00");
+    // Sinal sozinho: a pessoa ainda vai digitar o número.
+    expect(maskMoney("-", { allowNegative: true })).toBe("-");
+  });
+
+  it("não passa do inteiro seguro do JS", () => {
+    expect(parseMoney(maskMoney("9".repeat(20)))).toBeLessThan(Number.MAX_SAFE_INTEGER);
+  });
+});
+
+describe("parseMoney", () => {
+  it("devolve o número que vai para a API", () => {
+    expect(parseMoney("1.232,50")).toBe(1232.5);
+    expect(parseMoney("0,01")).toBe(0.01);
+    expect(parseMoney("-50,00")).toBe(-50);
+  });
+
+  it("campo vazio é null, e não zero — zero é um valor que alguém pode querer", () => {
+    expect(parseMoney("")).toBeNull();
+    expect(parseMoney("-")).toBeNull();
+    expect(parseMoney("0,00")).toBe(0);
+  });
+});
+
+describe("moneyToMask", () => {
+  it("traz o valor gravado de volta para o campo", () => {
+    expect(moneyToMask(1232.5)).toBe("1.232,50");
+    expect(moneyToMask(0)).toBe("0,00");
+    expect(moneyToMask(-50)).toBe("-50,00");
+  });
+
+  it("arredonda o centavo em vez de truncar", () => {
+    // 19.99 não é exato em ponto flutuante; truncar daria 19,98.
+    expect(moneyToMask(19.99)).toBe("19,99");
+    expect(moneyToMask(0.615)).toBe("0,62");
+  });
+
+  it("ausente vira campo vazio", () => {
+    expect(moneyToMask(null)).toBe("");
+    expect(moneyToMask(undefined)).toBe("");
+    expect(moneyToMask(Number.NaN)).toBe("");
   });
 });
 

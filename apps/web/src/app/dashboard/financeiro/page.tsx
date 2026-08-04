@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { MoneyInput } from "@/components/ui/money-input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton, SkeletonChart, SkeletonTableRows } from "@/components/ui/skeleton";
 import { SalesHeatmap } from "@/components/finance/sales-heatmap";
@@ -28,6 +29,7 @@ import {
   useTopProducts,
 } from "@/hooks/use-finance";
 import { ApiError } from "@/lib/api-client";
+import { parseMoney } from "@/lib/masks";
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CASH: "Dinheiro",
@@ -65,7 +67,13 @@ export default function FinanceiroPage() {
 
   async function handleCreateEntry(event: FormEvent) {
     event.preventDefault();
-    await createEntry.mutateAsync({ description, amount: Number(amount), category });
+
+    // Sem valor não há lançamento: antes o campo vazio virava `Number("")` —
+    // zero — e entrava no caixa como uma linha de R$ 0,00.
+    const amountValue = parseMoney(amount);
+    if (amountValue === null) return;
+
+    await createEntry.mutateAsync({ description, amount: amountValue, category });
     setDescription("");
     setAmount("");
     setCategory("");
@@ -223,12 +231,11 @@ export default function FinanceiroPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="cf-amount">Valor (negativo = saída)</Label>
-                <Input
+                <MoneyInput
                   id="cf-amount"
-                  type="number"
-                  step="0.01"
+                  allowNegative
                   value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
+                  onValueChange={setAmount}
                   required
                 />
               </div>

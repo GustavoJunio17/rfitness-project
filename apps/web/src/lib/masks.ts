@@ -59,6 +59,61 @@ function maskLocalPhone(digits: string): string {
   return `(${area}) ${rest.slice(0, split)}-${rest.slice(split)}`;
 }
 
+/**
+ * Dinheiro no padrão contábil brasileiro: `1.232,50`.
+ *
+ * Os dígitos entram pela direita, como numa calculadora de balcão — digitar
+ * `123250` dá `1.232,50`. É o comportamento de caixa e de ERP daqui, e evita
+ * a dúvida de "esse 1232 é mil duzentos e trinta e dois ou doze e trinta e
+ * dois?": os centavos estão sempre visíveis.
+ *
+ * Antes esses campos eram `<input type="number">`, que aceitava `1232p` sem
+ * reclamar e entregava string vazia na leitura — o formulário submetia zero
+ * sem ninguém perceber.
+ */
+export function maskMoney(value: string, options: { allowNegative?: boolean } = {}): string {
+  const negative = Boolean(options.allowNegative) && value.trimStart().startsWith("-");
+
+  // Zeros à esquerda caem por inteiro, e não só até sobrar um: é o que deixa
+  // apagar até esvaziar o campo. Mantendo um zero, `0,00` viraria o piso do
+  // backspace e não haveria como limpar o valor digitado por engano.
+  //
+  // 15 dígitos: acima disso a conta sai do inteiro seguro do JS e o valor
+  // exibido passa a divergir do digitado.
+  const digits = onlyDigits(value).replace(/^0+/, "").slice(0, 15);
+  if (!digits) return negative ? "-" : "";
+
+  return formatCents(digits, negative);
+}
+
+function formatCents(digits: string, negative: boolean): string {
+  const padded = digits.padStart(3, "0");
+  const cents = padded.slice(-2);
+  const units = padded.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+
+  return `${negative ? "-" : ""}${units},${cents}`;
+}
+
+/** Valor numérico do campo mascarado. `null` quando não há número nenhum. */
+export function parseMoney(masked: string): number | null {
+  const digits = onlyDigits(masked);
+  if (!digits) return null;
+
+  const value = Number(digits) / 100;
+  return masked.trimStart().startsWith("-") ? -value : value;
+}
+
+/**
+ * Número (do banco ou de um cálculo) no formato do campo.
+ *
+ * Não passa por `maskMoney` porque zero gravado deve aparecer como `0,00`, e
+ * lá o zero é justamente o que significa campo vazio.
+ */
+export function moneyToMask(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return "";
+  return formatCents(String(Math.round(Math.abs(value) * 100)), value < 0);
+}
+
 /** Aplica a máscara em valor que já veio do banco (dígitos crus). */
 export function formatCpf(value: string | null | undefined): string | null {
   if (!value) return null;
