@@ -8,6 +8,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetField, SheetSection } from "@/components/ui/sheet";
+import { maskPhone, onlyDigits } from "@/lib/masks";
 import { cn } from "@/lib/utils";
 import {
   useDeleteManagerAccount,
@@ -69,7 +70,8 @@ export function AccountSheet({ accountId, onClose }: { accountId: string | null;
   useEffect(() => {
     if (!account) return;
     setName(account.name);
-    setPhone(account.phone ?? "");
+    // O banco guarda dígitos; a máscara é reaplicada ao abrir para edição.
+    setPhone(maskPhone(account.phone ?? ""));
     setNotes(account.notes ?? "");
     setError(null);
     setPassword2("");
@@ -89,7 +91,12 @@ export function AccountSheet({ accountId, onClose }: { accountId: string | null;
     event.preventDefault();
     if (!account) return;
     await run(() =>
-      updateAccount.mutateAsync({ id: account.id, name, phone: phone || null, notes: notes || null }),
+      updateAccount.mutateAsync({
+        id: account.id,
+        name,
+        phone: onlyDigits(phone) || null,
+        notes: notes || null,
+      }),
     );
   }
 
@@ -270,7 +277,13 @@ export function AccountSheet({ accountId, onClose }: { accountId: string | null;
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="detail-phone">Telefone</Label>
-                  <Input id="detail-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                  <Input
+                    id="detail-phone"
+                    inputMode="tel"
+                    placeholder="(00) 00000-0000"
+                    value={phone}
+                    onChange={(e) => setPhone(maskPhone(e.target.value))}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="detail-notes">Observações internas</Label>

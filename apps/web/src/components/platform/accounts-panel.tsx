@@ -17,6 +17,7 @@ import {
   useManagerAccounts,
   type ManagerAccountStatus,
 } from "@/hooks/use-platform";
+import { maskPhone, onlyDigits } from "@/lib/masks";
 
 const STATUS_LABELS: Record<ManagerAccountStatus, string> = {
   PENDING: "Pendente",
@@ -48,7 +49,12 @@ function NewAccountSheet({ open, onOpenChange }: { open: boolean; onOpenChange: 
     event.preventDefault();
     setError(null);
     try {
-      await createAccount.mutateAsync({ name, email, password, phone: phone || undefined });
+      await createAccount.mutateAsync({
+        name,
+        email,
+        password,
+        phone: onlyDigits(phone) || undefined,
+      });
       setName("");
       setEmail("");
       setPhone("");
@@ -94,7 +100,13 @@ function NewAccountSheet({ open, onOpenChange }: { open: boolean; onOpenChange: 
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="account-phone">Telefone (opcional)</Label>
-          <Input id="account-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <Input
+            id="account-phone"
+            inputMode="tel"
+            placeholder="(00) 00000-0000"
+            value={phone}
+            onChange={(e) => setPhone(maskPhone(e.target.value))}
+          />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="account-password">Senha inicial</Label>

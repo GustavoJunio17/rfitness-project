@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton, SkeletonList } from "@/components/ui/skeleton";
 import { useAddGoal, useAddNote, useEnrollStudent, usePlans, useStudent, useToggleGoal } from "@/hooks/use-students";
+import { formatPhone } from "@/lib/masks";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Ativo",
@@ -89,7 +90,7 @@ export function StudentDetailDialog({
             <Badge variant={student.status === "ACTIVE" ? "default" : "outline"}>
               {STATUS_LABELS[student.status]}
             </Badge>
-            {student.whatsapp && <span>WhatsApp: {student.whatsapp}</span>}
+            {student.whatsapp && <span>WhatsApp: {formatPhone(student.whatsapp)}</span>}
             {student.email && <span>{student.email}</span>}
           </div>
 

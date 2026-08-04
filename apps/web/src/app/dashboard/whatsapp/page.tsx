@@ -11,6 +11,7 @@ import { SkeletonList } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useConversation, useConversations, useUpdateWhatsAppSettings } from "@/hooks/use-whatsapp";
 import { useSession } from "@/hooks/use-session";
+import { formatPhone } from "@/lib/masks";
 
 export default function WhatsAppPage() {
   const { data: session } = useSession();
@@ -98,7 +99,7 @@ export default function WhatsAppPage() {
                   selectedId === item.id && "bg-muted",
                 )}
               >
-                <p className="font-medium">{item.studentName ?? item.phone}</p>
+                <p className="font-medium">{item.studentName ?? formatPhone(item.phone)}</p>
                 <p className="truncate text-xs text-muted-foreground">
                   {item.lastMessage ?? "Sem mensagens"}
                 </p>
@@ -109,7 +110,7 @@ export default function WhatsAppPage() {
 
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>{conversation ? conversation.phone : "Selecione uma conversa"}</CardTitle>
+            <CardTitle>{conversation ? formatPhone(conversation.phone) : "Selecione uma conversa"}</CardTitle>
           </CardHeader>
           <CardContent
             className="max-h-[32rem] space-y-3 overflow-y-auto"

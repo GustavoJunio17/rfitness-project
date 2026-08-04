@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useProducts } from "@/hooks/use-catalog";
 import { useCreateOrder } from "@/hooks/use-orders";
 import { ApiError } from "@/lib/api-client";
+import { maskPhone, onlyDigits } from "@/lib/masks";
 import type { DeliveryType } from "@/types/orders";
 import type { PaymentMethodType } from "@/types/sales";
 
@@ -104,7 +105,7 @@ export function OrderFormDialog({ open, onOpenChange }: OrderFormDialogProps) {
     try {
       await createOrder.mutateAsync({
         customerName,
-        customerPhone,
+        customerPhone: onlyDigits(customerPhone),
         deliveryType,
         address: deliveryType === "DELIVERY" ? address || undefined : undefined,
         paymentMethod,
@@ -138,9 +139,10 @@ export function OrderFormDialog({ open, onOpenChange }: OrderFormDialogProps) {
             <Label htmlFor="order-customer-phone">Telefone</Label>
             <Input
               id="order-customer-phone"
-              placeholder="5511999999999"
+              inputMode="tel"
+              placeholder="(00) 00000-0000"
               value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
+              onChange={(e) => setCustomerPhone(maskPhone(e.target.value))}
               required
             />
           </div>

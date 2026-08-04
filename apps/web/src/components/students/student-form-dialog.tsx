@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCreateStudent } from "@/hooks/use-students";
+import { maskCpf, maskPhone, onlyDigits } from "@/lib/masks";
 
 interface StudentFormDialogProps {
   open: boolean;
@@ -34,11 +35,13 @@ export function StudentFormDialog({ open, onOpenChange }: StudentFormDialogProps
     event.preventDefault();
     setError(null);
     try {
+      // A máscara fica na tela; o que é gravado são os dígitos. O agente de IA
+      // procura o aluno pelo número que o WhatsApp entrega, e esse vem cru.
       await createStudent.mutateAsync({
         name,
-        cpf: cpf || undefined,
-        phone: phone || undefined,
-        whatsapp: whatsapp || undefined,
+        cpf: onlyDigits(cpf) || undefined,
+        phone: onlyDigits(phone) || undefined,
+        whatsapp: onlyDigits(whatsapp) || undefined,
         email: email || undefined,
       });
       reset();
@@ -62,20 +65,33 @@ export function StudentFormDialog({ open, onOpenChange }: StudentFormDialogProps
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label htmlFor="student-cpf">CPF</Label>
-            <Input id="student-cpf" value={cpf} onChange={(e) => setCpf(e.target.value)} />
+            <Input
+              id="student-cpf"
+              inputMode="numeric"
+              placeholder="000.000.000-00"
+              value={cpf}
+              onChange={(e) => setCpf(maskCpf(e.target.value))}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="student-phone">Telefone</Label>
-            <Input id="student-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <Input
+              id="student-phone"
+              inputMode="tel"
+              placeholder="(00) 00000-0000"
+              value={phone}
+              onChange={(e) => setPhone(maskPhone(e.target.value))}
+            />
           </div>
         </div>
         <div className="space-y-2">
           <Label htmlFor="student-whatsapp">WhatsApp (usado pelo agente de IA)</Label>
           <Input
             id="student-whatsapp"
-            placeholder="5511999999999"
+            inputMode="tel"
+            placeholder="+55 (11) 99999-9999"
             value={whatsapp}
-            onChange={(e) => setWhatsapp(e.target.value)}
+            onChange={(e) => setWhatsapp(maskPhone(e.target.value))}
           />
         </div>
         <div className="space-y-2">

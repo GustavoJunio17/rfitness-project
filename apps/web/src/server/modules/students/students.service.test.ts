@@ -88,6 +88,27 @@ describe("createStudent", () => {
     expect(sideEffects.publish).toHaveBeenCalledWith("gym-1", "student.created", { studentId: "student-1" });
   });
 
+  it("grava CPF e telefones só com dígitos, venham mascarados ou não", async () => {
+    const repo = makeRepo();
+    const service = createStudentsService(repo, makeSideEffects());
+
+    await service.createStudent("gym-1", {
+      name: "Ana Souza",
+      cpf: "123.456.789-01",
+      phone: "(31) 3333-4444",
+      whatsapp: "+55 (31) 99999-1111",
+    });
+
+    expect(repo.create).toHaveBeenCalledWith(
+      "gym-1",
+      expect.objectContaining({
+        cpf: "12345678901",
+        phone: "3133334444",
+        whatsapp: "5531999991111",
+      }),
+    );
+  });
+
   it("falha no envio da mensagem não impede o cadastro", async () => {
     const sideEffects = makeSideEffects({
       sendWelcomeMessage: vi.fn().mockRejectedValue(new Error("Evolution API fora do ar")),
@@ -97,6 +118,33 @@ describe("createStudent", () => {
     await expect(service.createStudent("gym-1", { name: "Ana Souza" })).resolves.toMatchObject({
       id: "student-1",
     });
+  });
+});
+
+describe("updateStudent", () => {
+  it("normaliza os campos enviados e não inventa os ausentes", async () => {
+    const repo = makeRepo();
+    const service = createStudentsService(repo, makeSideEffects());
+
+    await service.updateStudent("gym-1", "student-1", { cpf: "123.456.789-01" });
+
+    const patch = (repo.update as ReturnType<typeof vi.fn>).mock.calls[0]![2] as Record<string, unknown>;
+    expect(patch.cpf).toBe("12345678901");
+    // Campo não enviado não pode virar `null` e apagar o que estava gravado.
+    expect(patch).not.toHaveProperty("phone");
+  });
+
+  it("campo limpo na tela apaga o valor gravado", async () => {
+    const repo = makeRepo();
+    const service = createStudentsService(repo, makeSideEffects());
+
+    await service.updateStudent("gym-1", "student-1", { cpf: "", phone: "" });
+
+    expect(repo.update).toHaveBeenCalledWith(
+      "gym-1",
+      "student-1",
+      expect.objectContaining({ cpf: null, phone: null }),
+    );
   });
 });
 

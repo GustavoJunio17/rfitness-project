@@ -63,22 +63,34 @@ function toStudentRecord(student: StudentWithRelations): StudentRecord {
   };
 }
 
+/**
+ * CPF e telefone são guardados só com dígitos, mas a tela os mostra
+ * mascarados — e é o valor mascarado que a pessoa copia da tabela e cola na
+ * busca. Procurar também pela versão sem pontuação faz "123.456" encontrar o
+ * CPF gravado como "12345678901".
+ */
+function searchClauses(search: string): Prisma.StudentWhereInput[] {
+  const clauses: Prisma.StudentWhereInput[] = [{ name: { contains: search, mode: "insensitive" } }];
+
+  for (const term of new Set([search, search.replace(/\D/g, "")])) {
+    if (!term) continue;
+    clauses.push(
+      { cpf: { contains: term } },
+      { phone: { contains: term } },
+      { whatsapp: { contains: term } },
+    );
+  }
+
+  return clauses;
+}
+
 export const prismaStudentsRepository: StudentsRepository = {
   async findMany(gymId: string, filters: StudentFilters): Promise<StudentRecord[]> {
     const students = await prisma.student.findMany({
       where: {
         gymId,
         ...(filters.status ? { status: filters.status } : {}),
-        ...(filters.search
-          ? {
-              OR: [
-                { name: { contains: filters.search, mode: "insensitive" } },
-                { cpf: { contains: filters.search } },
-                { phone: { contains: filters.search } },
-                { whatsapp: { contains: filters.search } },
-              ],
-            }
-          : {}),
+        ...(filters.search ? { OR: searchClauses(filters.search) } : {}),
       },
       include: studentInclude,
       orderBy: { name: "asc" },

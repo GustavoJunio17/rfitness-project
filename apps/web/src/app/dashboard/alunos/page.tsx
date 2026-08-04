@@ -13,6 +13,7 @@ import { StudentFormDialog } from "@/components/students/student-form-dialog";
 import { PlanFormDialog } from "@/components/students/plan-form-dialog";
 import { StudentDetailDialog } from "@/components/students/student-detail-dialog";
 import type { StudentStatus } from "@/types/students";
+import { formatPhone } from "@/lib/masks";
 
 const STATUS_LABELS: Record<StudentStatus, string> = {
   ACTIVE: "Ativo",
@@ -94,7 +95,7 @@ export default function AlunosPage() {
           {students?.map((student) => (
             <TableRow key={student.id} className="cursor-pointer" onClick={() => setSelectedStudentId(student.id)}>
               <TableCell className="font-medium">{student.name}</TableCell>
-              <TableCell>{student.whatsapp ?? student.phone ?? "—"}</TableCell>
+              <TableCell>{formatPhone(student.whatsapp ?? student.phone) ?? "—"}</TableCell>
               <TableCell>
                 <Badge variant={student.status === "ACTIVE" ? "default" : "outline"}>
                   {STATUS_LABELS[student.status]}

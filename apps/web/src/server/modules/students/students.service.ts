@@ -16,6 +16,16 @@ export function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, "");
 }
 
+/**
+ * CPF também vai para o banco só com dígitos. A tela manda mascarado ou cru
+ * conforme o campo, e outros clientes da API mandam o que quiserem — guardar
+ * um formato só é o que faz a busca por CPF encontrar o mesmo aluno nos dois
+ * casos.
+ */
+export function normalizeCpf(cpf: string): string {
+  return cpf.replace(/\D/g, "");
+}
+
 export interface EnrollInput {
   planId: string;
   startDate?: string;
@@ -63,6 +73,7 @@ export function createStudentsService(repository: StudentsRepository, sideEffect
   async function createStudent(gymId: string, input: StudentWriteInput): Promise<StudentRecord> {
     const student = await repository.create(gymId, {
       ...input,
+      cpf: input.cpf ? normalizeCpf(input.cpf) : null,
       phone: input.phone ? normalizePhone(input.phone) : null,
       whatsapp: input.whatsapp ? normalizePhone(input.whatsapp) : null,
     });
@@ -88,6 +99,7 @@ export function createStudentsService(repository: StudentsRepository, sideEffect
     await getStudent(gymId, id);
     return repository.update(gymId, id, {
       ...input,
+      ...(input.cpf !== undefined ? { cpf: input.cpf ? normalizeCpf(input.cpf) : null } : {}),
       ...(input.phone !== undefined ? { phone: input.phone ? normalizePhone(input.phone) : null } : {}),
       ...(input.whatsapp !== undefined
         ? { whatsapp: input.whatsapp ? normalizePhone(input.whatsapp) : null }
