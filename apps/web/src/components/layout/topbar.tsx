@@ -22,7 +22,7 @@ export function Topbar({ userName, userEmail }: { userName: string; userEmail: s
   }
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-border px-6">
+    <header className="flex h-16 shrink-0 items-center justify-between border-b border-border px-6">
       <div>
         <p className="text-sm font-medium">{userName}</p>
         <p className="text-xs text-muted-foreground">{userEmail}</p>

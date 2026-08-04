@@ -45,12 +45,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
     // para outra, o estado dos componentes (menu aberto, filtros, formulários)
     // viria junto. Trocar a chave força uma montagem limpa.
     <InitialSessionProvider key={auth.authUserId} session={session}>
-      <div className="flex min-h-screen">
+      {/* Altura exata da viewport, não `min-h-screen`: com altura mínima o shell
+          crescia junto com o conteúdo e o menu esticava com ele — o rodapé
+          "Gerenciando" ia parar no fim do documento, fora da tela. Quem rola é
+          só o `main`; o menu e a topbar ficam parados. */}
+      <div className="flex h-screen overflow-hidden">
         <SessionGuard expectedAuthUserId={auth.authUserId} />
         <RealtimeBridge />
         <NoGymGate />
         <Sidebar />
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Topbar userName={auth.name} userEmail={auth.email} />
           <main className="flex-1 overflow-y-auto bg-muted/30 p-6">{children}</main>
         </div>

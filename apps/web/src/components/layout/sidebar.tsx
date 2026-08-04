@@ -81,11 +81,14 @@ export function Sidebar() {
 
   return (
     <aside className="hidden w-64 shrink-0 border-r border-border bg-card md:flex md:flex-col">
-      <div className="flex h-16 items-center border-b border-border px-6 text-xl font-black tracking-tight">
+      <div className="flex h-16 shrink-0 items-center border-b border-border px-6 text-xl font-black tracking-tight">
         <span className="text-brand-red">R</span>Fitness
       </div>
 
-      <nav className="flex-1 space-y-5 overflow-y-auto p-3">
+      {/* `min-h-0` para o item flexível poder encolher: sem ele o nav nunca fica
+          menor que o conteúdo e a rolagem escaparia para fora do menu. Assim ele
+          só rola quando os links de fato não cabem na tela. */}
+      <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto p-3">
         {groups.map((group) => (
           <div key={group.label} className="space-y-1">
             <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
@@ -105,7 +108,7 @@ export function Sidebar() {
       </nav>
 
       {session?.gym && (
-        <div className="border-t border-border px-4 py-3">
+        <div className="shrink-0 border-t border-border px-4 py-3">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Gerenciando</p>
           <p className="truncate text-sm font-medium">{session.gym.name}</p>
         </div>
