@@ -88,7 +88,7 @@ export function SignUpForm() {
         title="Conta criada"
         subtitle="Falta a liberação da administração da RFitness."
         footer={
-          <Link href="/login" className="font-medium text-white hover:text-brand-400">
+          <Link href="/login" className="font-medium text-brand hover:text-brand-600">
             Voltar para o login
           </Link>
         }
@@ -115,7 +115,7 @@ export function SignUpForm() {
       footer={
         <>
           Já tem conta?{" "}
-          <Link href="/login" className="font-medium text-white hover:text-brand-400">
+          <Link href="/login" className="font-medium text-brand hover:text-brand-600">
             Entrar
           </Link>
         </>

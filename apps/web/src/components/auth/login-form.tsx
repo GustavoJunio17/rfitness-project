@@ -80,7 +80,7 @@ export function LoginForm() {
       footer={
         <>
           Ainda não tem conta?{" "}
-          <Link href="/cadastro" className="font-medium text-white hover:text-brand-400">
+          <Link href="/cadastro" className="font-medium text-brand hover:text-brand-600">
             Criar conta
           </Link>
         </>

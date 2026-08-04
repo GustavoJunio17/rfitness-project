@@ -1,35 +1,36 @@
 import Link from "next/link";
-import { Card, CardContent } from "@/components/ui/card";
 
 interface AuthShellProps {
   title: string;
   subtitle: string;
   children: React.ReactNode;
   footer: React.ReactNode;
-  /** Cadastro tem mais campos que o login e pede um cartão mais largo. */
+  /** Cadastro tem mais campos que o login e pede uma coluna mais larga. */
   wide?: boolean;
 }
 
+/**
+ * Coluna do formulário no layout lateral: sem cartão, porque a própria coluna
+ * já separa o formulário do painel da marca. O logo só aparece abaixo de `lg`,
+ * onde o painel da esquerda não é renderizado.
+ */
 export function AuthShell({ title, subtitle, children, footer, wide = false }: AuthShellProps) {
   return (
-    <div className={wide ? "w-full max-w-md" : "w-full max-w-sm"}>
-      <Link href="/" className="mb-6 flex items-center justify-center gap-2">
-        <span className="text-3xl font-black tracking-tight text-white">
+    <div className={`mx-auto w-full ${wide ? "max-w-md" : "max-w-sm"}`}>
+      <Link href="/" className="mb-8 flex items-center gap-2 lg:hidden">
+        <span className="text-3xl font-black tracking-tight text-foreground">
           <span className="text-brand">R</span>Fitness
         </span>
       </Link>
 
-      <Card className="border-white/10 shadow-2xl shadow-black/40">
-        <CardContent className="p-7">
-          <div className="mb-6 space-y-1">
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">{title}</h1>
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
-          </div>
-          {children}
-        </CardContent>
-      </Card>
+      <div className="mb-7 space-y-1.5">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">{title}</h1>
+        <p className="text-sm leading-relaxed text-muted-foreground">{subtitle}</p>
+      </div>
 
-      <div className="mt-6 text-center text-sm text-white/60">{footer}</div>
+      {children}
+
+      <div className="mt-8 border-t border-border pt-6 text-sm text-muted-foreground">{footer}</div>
     </div>
   );
 }
