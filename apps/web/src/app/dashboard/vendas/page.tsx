@@ -86,6 +86,9 @@ export default function VendasPage() {
   }
 
   async function handleScan(code: string) {
+    // Limpa o "não encontrado" da leitura anterior: sem isso o aviso do bipe
+    // que falhou continuava na tela depois de um bipe que deu certo.
+    setError(null);
     try {
       const variant = await apiFetch<{
         id: string;
