@@ -1,15 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { Check } from "lucide-react";
+import { Check, Pencil, Trash2 } from "lucide-react";
 import { Dialog, DialogCloseButton, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Skeleton, SkeletonList } from "@/components/ui/skeleton";
-import { useAddGoal, useAddNote, useEnrollStudent, usePlans, useStudent, useToggleGoal } from "@/hooks/use-students";
-import { formatPhone } from "@/lib/masks";
+import {
+  useAddGoal,
+  useAddNote,
+  useDeleteStudent,
+  useEnrollStudent,
+  usePlans,
+  useStudent,
+  useToggleGoal,
+  useUpdateStudentStatus,
+} from "@/hooks/use-students";
+import { StudentFormDialog } from "@/components/students/student-form-dialog";
+import { formatCpf, formatPhone } from "@/lib/masks";
+import type { StudentStatus } from "@/types/students";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Ativo",
@@ -17,6 +29,12 @@ const STATUS_LABELS: Record<string, string> = {
   SUSPENDED: "Suspenso",
   CANCELLED: "Cancelado",
 };
+
+/**
+ * INADIMPLENTE fica de fora: é derivado das matrículas a cada leitura, então
+ * marcá-lo à mão duraria só até o próximo carregamento da tela.
+ */
+const ASSIGNABLE_STATUSES: StudentStatus[] = ["ACTIVE", "SUSPENDED", "CANCELLED"];
 
 function currency(value: number) {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -35,12 +53,23 @@ export function StudentDetailDialog({
   const addGoal = useAddGoal();
   const toggleGoal = useToggleGoal();
   const addNote = useAddNote();
+  const updateStatus = useUpdateStudentStatus();
+  const deleteStudent = useDeleteStudent();
 
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [goalDescription, setGoalDescription] = useState("");
   const [noteContent, setNoteContent] = useState("");
+  const [isEditOpen, setEditOpen] = useState(false);
+  const [isDeleteOpen, setDeleteOpen] = useState(false);
 
   if (!studentId) return null;
+
+  async function handleDelete() {
+    if (!studentId) return;
+    await deleteStudent.mutateAsync(studentId);
+    // Fecha o detalhe junto: o aluno que ele mostra não existe mais.
+    onOpenChange(false);
+  }
 
   async function handleEnroll() {
     if (!selectedPlanId || !studentId) return;
@@ -86,12 +115,50 @@ export function StudentDetailDialog({
 
       {student && (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <Badge variant={student.status === "ACTIVE" ? "default" : "outline"}>
-              {STATUS_LABELS[student.status]}
-            </Badge>
-            {student.whatsapp && <span>WhatsApp: {formatPhone(student.whatsapp)}</span>}
-            {student.email && <span>{student.email}</span>}
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <Badge variant={student.status === "ACTIVE" ? "default" : "outline"}>
+                {STATUS_LABELS[student.status]}
+              </Badge>
+              {student.cpf && <span>CPF: {formatCpf(student.cpf)}</span>}
+              {student.phone && <span>Tel.: {formatPhone(student.phone)}</span>}
+              {student.whatsapp && <span>WhatsApp: {formatPhone(student.whatsapp)}</span>}
+              {student.email && <span>{student.email}</span>}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil className="mr-2 h-3 w-3" aria-hidden /> Editar
+              </Button>
+
+              <Select
+                aria-label="Status do aluno"
+                className="h-9 w-auto"
+                value={ASSIGNABLE_STATUSES.includes(student.status) ? student.status : ""}
+                onChange={(e) => updateStatus.mutate({ id: student.id, status: e.target.value as StudentStatus })}
+                disabled={updateStatus.isPending}
+              >
+                {/* Inadimplente não é atribuível, mas é o estado atual de quem
+                    venceu — precisa aparecer para o campo não mentir. */}
+                {!ASSIGNABLE_STATUSES.includes(student.status) && (
+                  <option value="">{STATUS_LABELS[student.status]}</option>
+                )}
+                {ASSIGNABLE_STATUSES.map((value) => (
+                  <option key={value} value={value}>
+                    {STATUS_LABELS[value]}
+                  </option>
+                ))}
+              </Select>
+
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto text-brand-red hover:bg-brand-red/10 hover:text-brand-red"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash2 className="mr-2 h-3 w-3" aria-hidden /> Excluir
+              </Button>
+            </div>
           </div>
 
           <section className="space-y-2">
@@ -169,6 +236,29 @@ export function StudentDetailDialog({
               </Button>
             </div>
           </section>
+
+          <StudentFormDialog open={isEditOpen} onOpenChange={setEditOpen} student={student} />
+
+          <ConfirmDialog
+            open={isDeleteOpen}
+            onOpenChange={setDeleteOpen}
+            title="Excluir aluno"
+            confirmLabel="Excluir aluno"
+            description={
+              <>
+                <p>
+                  <span className="font-medium">{student.name}</span> sai da academia junto com as
+                  matrículas, metas e observações. Vendas e pedidos continuam no histórico, mas sem
+                  o vínculo com o aluno.
+                </p>
+                <p>
+                  Não dá para desfazer — e quem já tem fatura lançada não pode ser excluído. Para só
+                  tirar da operação, use o status Cancelado.
+                </p>
+              </>
+            }
+            onConfirm={handleDelete}
+          />
         </div>
       )}
     </Dialog>

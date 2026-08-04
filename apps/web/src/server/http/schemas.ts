@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { PASSWORD_MIN_LENGTH } from "@rfitness/core";
+import { isValidCpf, PASSWORD_MIN_LENGTH } from "@rfitness/core";
 
 /** Schemas compartilhados pelos route handlers. Um só lugar para os enums. */
 
@@ -190,7 +190,16 @@ export const planSchema = z.object({
 
 export const studentSchema = z.object({
   name: z.string().trim().min(2).max(120),
-  cpf: z.string().trim().max(20).optional().nullable(),
+  // A tela já avisa enquanto digita, mas ela não é a única porta: a mesma
+  // regra vale para qualquer cliente da API. Vazio continua aceito — CPF é
+  // opcional no cadastro.
+  cpf: z
+    .string()
+    .trim()
+    .max(20)
+    .refine((value) => value === "" || isValidCpf(value), "CPF inválido.")
+    .optional()
+    .nullable(),
   phone: z.string().trim().max(20).optional().nullable(),
   whatsapp: z.string().trim().max(20).optional().nullable(),
   email: z.string().trim().email().optional().nullable(),

@@ -3,6 +3,7 @@
 import * as React from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEscapeToClose } from "@/hooks/use-escape-to-close";
 
 interface DialogProps {
   open: boolean;
@@ -22,14 +23,7 @@ interface DialogProps {
  * sem alteração ponto a ponto — e nenhuma ficou para trás.
  */
 export function Dialog({ open, onOpenChange, children }: DialogProps) {
-  React.useEffect(() => {
-    if (!open) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChange(false);
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onOpenChange]);
+  useEscapeToClose(open, () => onOpenChange(false));
 
   if (!open) return null;
 

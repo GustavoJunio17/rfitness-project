@@ -69,6 +69,63 @@ export function useCreateStudent() {
   });
 }
 
+/**
+ * Edição, status e exclusão invalidam a lista *e* o detalhe: o painel de
+ * detalhe costuma estar aberto por trás da ação, e sem isso ele continuaria
+ * mostrando o aluno como estava antes de salvar.
+ */
+/**
+ * `null` em vez de `undefined` nos opcionais: no PATCH parcial do servidor,
+ * campo ausente significa "não mexe" e `null` significa "limpa". Sem essa
+ * diferença não haveria como apagar um CPF digitado errado.
+ */
+export interface UpdateStudentInput {
+  id: string;
+  name: string;
+  cpf: string | null;
+  phone: string | null;
+  whatsapp: string | null;
+  email: string | null;
+}
+
+export function useUpdateStudent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: UpdateStudentInput) =>
+      apiFetch<Student>(`/students/${id}`, { method: "PUT", body: JSON.stringify(input) }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["student", variables.id] });
+    },
+  });
+}
+
+export function useUpdateStudentStatus() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, status }: { id: string; status: StudentStatus }) =>
+      apiFetch<Student>(`/students/${id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.invalidateQueries({ queryKey: ["student", variables.id] });
+    },
+  });
+}
+
+export function useDeleteStudent() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiFetch(`/students/${id}`, { method: "DELETE" }),
+    onSuccess: (_data, id) => {
+      queryClient.invalidateQueries({ queryKey: ["students"] });
+      queryClient.removeQueries({ queryKey: ["student", id] });
+    },
+  });
+}
+
 export function useEnrollStudent() {
   const queryClient = useQueryClient();
   return useMutation({

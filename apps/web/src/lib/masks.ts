@@ -10,6 +10,11 @@
  * do remetente, e a busca do agente depende de bater exato.
  */
 
+// A validação de CPF é regra de domínio e mora no core, junto da que a API
+// usa — reexportada aqui só para o formulário importar máscara e validação do
+// mesmo lugar.
+export { isValidCpf } from "@rfitness/core";
+
 export function onlyDigits(value: string): string {
   return value.replace(/\D/g, "");
 }

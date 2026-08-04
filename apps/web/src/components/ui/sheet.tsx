@@ -3,6 +3,7 @@
 import * as React from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useEscapeToClose } from "@/hooks/use-escape-to-close";
 
 interface SheetProps {
   open: boolean;
@@ -23,14 +24,7 @@ interface SheetProps {
  * um formulário longo não empurra os botões para fora da tela.
  */
 export function Sheet({ open, onOpenChange, title, description, footer, children }: SheetProps) {
-  React.useEffect(() => {
-    if (!open) return undefined;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChange(false);
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open, onOpenChange]);
+  useEscapeToClose(open, () => onOpenChange(false));
 
   if (!open) return null;
 

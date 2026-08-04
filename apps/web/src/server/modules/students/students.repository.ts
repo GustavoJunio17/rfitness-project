@@ -1,5 +1,5 @@
 import { Prisma, type StudentStatus } from "@prisma/client";
-import { notFoundError, toNumber } from "@rfitness/core";
+import { conflictError, notFoundError, toNumber } from "@rfitness/core";
 import { prisma } from "../../db";
 import { publishRealtime } from "../../realtime/publisher";
 import { createNotification } from "../notifications/notifications.service";
@@ -84,6 +84,22 @@ function searchClauses(search: string): Prisma.StudentWhereInput[] {
   return clauses;
 }
 
+/**
+ * CPF é único por academia (`@@unique([gymId, cpf])`). Sem traduzir o P2002, o
+ * gestor que recadastra alguém já matriculado leva um 500 sem explicação, em
+ * vez de saber que o aluno já existe.
+ */
+async function withDuplicateCpfMessage<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      throw conflictError("Já existe um aluno com este CPF nesta academia.");
+    }
+    throw error;
+  }
+}
+
 export const prismaStudentsRepository: StudentsRepository = {
   async findMany(gymId: string, filters: StudentFilters): Promise<StudentRecord[]> {
     const students = await prisma.student.findMany({
@@ -114,29 +130,33 @@ export const prismaStudentsRepository: StudentsRepository = {
   },
 
   async create(gymId: string, input: StudentWriteInput): Promise<StudentRecord> {
-    const student = await prisma.student.create({
-      data: {
-        gymId,
-        name: input.name,
-        cpf: input.cpf ?? null,
-        phone: input.phone ?? null,
-        whatsapp: input.whatsapp ?? null,
-        email: input.email ?? null,
-        address: input.address ?? null,
-        trainerName: input.trainerName ?? null,
-        notes: input.notes ?? null,
-      },
-      include: studentInclude,
+    return withDuplicateCpfMessage(async () => {
+      const student = await prisma.student.create({
+        data: {
+          gymId,
+          name: input.name,
+          cpf: input.cpf ?? null,
+          phone: input.phone ?? null,
+          whatsapp: input.whatsapp ?? null,
+          email: input.email ?? null,
+          address: input.address ?? null,
+          trainerName: input.trainerName ?? null,
+          notes: input.notes ?? null,
+        },
+        include: studentInclude,
+      });
+      return toStudentRecord(student);
     });
-    return toStudentRecord(student);
   },
 
   async update(gymId: string, id: string, input: Partial<StudentWriteInput>): Promise<StudentRecord> {
-    const { count } = await prisma.student.updateMany({ where: { id, gymId }, data: input });
-    if (count === 0) throw notFoundError("Aluno não encontrado.");
+    return withDuplicateCpfMessage(async () => {
+      const { count } = await prisma.student.updateMany({ where: { id, gymId }, data: input });
+      if (count === 0) throw notFoundError("Aluno não encontrado.");
 
-    const student = await prisma.student.findUniqueOrThrow({ where: { id }, include: studentInclude });
-    return toStudentRecord(student);
+      const student = await prisma.student.findUniqueOrThrow({ where: { id }, include: studentInclude });
+      return toStudentRecord(student);
+    });
   },
 
   async updateStatus(gymId: string, id: string, status: StudentStatus): Promise<StudentRecord> {
@@ -148,8 +168,22 @@ export const prismaStudentsRepository: StudentsRepository = {
   },
 
   async delete(gymId: string, id: string): Promise<void> {
-    const { count } = await prisma.student.deleteMany({ where: { id, gymId } });
-    if (count === 0) throw notFoundError("Aluno não encontrado.");
+    try {
+      const { count } = await prisma.student.deleteMany({ where: { id, gymId } });
+      if (count === 0) throw notFoundError("Aluno não encontrado.");
+    } catch (error) {
+      // Matrícula, meta e observação somem junto (cascade no schema), mas
+      // fatura não: ela é dinheiro lançado e a FK é obrigatória, então o banco
+      // barra a exclusão. Sem esta tradução o gestor levava um 500 mudo ao
+      // tentar apagar qualquer aluno que já foi cobrado uma vez.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2003") {
+        throw conflictError(
+          "Este aluno tem faturas lançadas e não pode ser excluído — o histórico financeiro " +
+            "deixaria de fechar. Use o status Cancelado para tirá-lo da operação.",
+        );
+      }
+      throw error;
+    }
   },
 
   async findPlan(gymId: string, planId: string): Promise<PlanRecord | null> {
